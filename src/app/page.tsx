@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,12 +26,12 @@ const defaultStaff = [
 ];
 
 const defaultShifts = [
-  { name: 'Regular day', duration: 8, startTime: '08:00', endTime: '16:00' },
-  { name: 'Evening', duration: 8, startTime: '14:00', endTime: '22:00' },
-  { name: 'Night', duration: 11, startTime: '21:30', endTime: '08:30' },
-  { name: 'Clinic', duration: 8.5, startTime: '08:00', endTime: '16:30' },
-  { name: 'Day (Weekend)', duration: 12.5, startTime: '08:00', endTime: '20:30' },
-  { name: 'Night (Weekend)', duration: 12.5, startTime: '08:00', endTime: '08:30' },
+  { name: 'Regular day', startTime: '08:00', endTime: '16:00' },
+  { name: 'Evening', startTime: '14:00', endTime: '22:00' },
+  { name: 'Night', startTime: '21:30', endTime: '08:30' },
+  { name: 'Clinic', startTime: '08:00', endTime: '16:30' },
+  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30' },
+  { name: 'Night (Weekend)', startTime: '08:00', endTime: '08:30' },
 ];
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -87,8 +87,21 @@ export default function Home() {
     setStaff(newStaff);
   };
 
+  const calculateDuration = (startTime: string, endTime: string): number => {
+    const start = parse(startTime, 'HH:mm', new Date());
+    const end = parse(endTime, 'HH:mm', new Date());
+    let duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Duration in hours
+
+    if (duration < 0) {
+      duration += 24; // If the end time is earlier than the start time (e.g., night shift), add 24 hours
+    }
+
+    return duration;
+  };
+
+
   const addShift = () => {
-    setShifts([...shifts, { name: '', duration: 8, startTime: '08:00', endTime: '16:00' }]);
+    setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00' }]);
   };
 
   const removeShift = (index: number) => {
@@ -99,7 +112,16 @@ export default function Home() {
 
   const updateShift = (index: number, field: string, value: any) => {
     const newShifts = [...shifts];
-    newShifts[index] = { ...newShifts[index], [field]: value };
+    const updatedShift = { ...newShifts[index], [field]: value };
+
+    // Calculate duration if startTime or endTime is updated
+    if (field === 'startTime' || field === 'endTime') {
+      const startTime = field === 'startTime' ? value : updatedShift.startTime;
+      const endTime = field === 'endTime' ? value : updatedShift.endTime;
+      updatedShift.duration = calculateDuration(startTime, endTime);
+    }
+
+    newShifts[index] = updatedShift;
     setShifts(newShifts);
   };
 
@@ -114,7 +136,7 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-             <Card>
+            <Card>
               <CardHeader>
                 <CardTitle>Category Configuration</CardTitle>
                 <CardDescription>Configure available categories.</CardDescription>
@@ -221,7 +243,7 @@ export default function Home() {
                           onChange={(e) => updateShift(index, 'name', e.target.value)}
                         />
                       </div>
-                       <div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700">Start Time</label>
                         <Select
                           onValueChange={(value) => updateShift(index, 'startTime', value)}
@@ -257,8 +279,8 @@ export default function Home() {
                         <label className="block text-sm font-medium text-gray-700">Duration</label>
                         <Input
                           type="number"
-                          value={shift.duration.toString()}
-                          onChange={(e) => updateShift(index, 'duration', parseFloat(e.target.value))}
+                          value={calculateDuration(shift.startTime, shift.endTime).toString()}
+                          readOnly
                         />
                       </div>
                     </div>
@@ -274,81 +296,79 @@ export default function Home() {
                 </Button>
               </CardContent>
             </Card>
-
             <Button variant="secondary" onClick={handleResetConfiguration}>
               Reset Configuration
             </Button>
             <Card>
-                <CardContent className="flex justify-center">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={'outline'}
-                        className={cn(
-                          'w-[240px] justify-start text-left font-normal',
-                          !dateRange.from || !dateRange.to && 'text-muted-foreground'
-                        )}
-                      >
-                        {formattedDateRange === 'Select Date Range' ? (
-                          <span>Select Date Range</span>
-                        ) : (
-                          <span>{formattedDateRange}</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="range"
-                        defaultMonth={dateRange.from ? new Date(dateRange.from) : new Date()}
-                        selected={dateRange}
-                        onSelect={setDateRange}
-                        disabled={(date) => date > new Date(new Date().setDate(new Date().getDate() + 365)) || date < new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </CardContent>
-              </Card>
-              <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button disabled={!isValidDateRange} variant="primary">
-                        Generate Roster
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Confirmation</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to generate a roster for {formattedDateRange}?
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <Button
-                          type="submit"
-                          onClick={async () => {
-                            if (dateRange.from && dateRange.to) {
-                              const startDate = format(dateRange.from, 'yyyy-MM-dd');
-                              const endDate = format(dateRange.to, 'yyyy-MM-dd');
+              <CardContent className="flex justify-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={'outline'}
+                      className={cn(
+                        'w-[240px] justify-start text-left font-normal',
+                        !dateRange.from || !dateRange.to && 'text-muted-foreground'
+                      )}
+                    >
+                      {formattedDateRange === 'Select Date Range' ? (
+                        <span>Select Date Range</span>
+                      ) : (
+                        <span>{formattedDateRange}</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="range"
+                      defaultMonth={dateRange.from ? new Date(dateRange.from) : new Date()}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      disabled={(date) => date > new Date(new Date().setDate(new Date().getDate() + 365)) || date < new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </CardContent>
+            </Card>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button disabled={!isValidDateRange} variant="primary">
+                  Generate Roster
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmation</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to generate a roster for {formattedDateRange}?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <Button
+                    type="submit"
+                    onClick={async () => {
+                      if (dateRange.from && dateRange.to) {
+                        const startDate = format(dateRange.from, 'yyyy-MM-dd');
+                        const endDate = format(dateRange.to, 'yyyy-MM-dd');
 
-                              const roster = await generateRoster({
-                                startDate: startDate,
-                                endDate: endDate,
-                              });
-                              console.log(roster);
-                              alert('Roster generated successfully!');
-                            }
-                          }}
-                        >
-                          Generate
-                        </Button>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                        const roster = await generateRoster({
+                          startDate: startDate,
+                          endDate: endDate,
+                        });
+                        console.log(roster);
+                        alert('Roster generated successfully!');
+                      }
+                    }}
+                  >
+                    Generate
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-
