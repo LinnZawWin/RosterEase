@@ -9,13 +9,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useState } from 'react';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarSeparator, SidebarTrigger } from '@/components/ui/sidebar';
-import { Settings } from 'lucide-react';
-import { Staff } from '@/services/staff';
-import { Shift } from '@/services/shift';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PlusCircle, Trash2 } from 'lucide-react';
 
-const defaultStaff: Staff[] = [
+const defaultStaff = [
   { name: 'AT-1', category: 'AT-1', fte: 1 },
   { name: 'AT-2', category: 'AT-2', fte: 1 },
   { name: 'AT-3', category: 'AT-3', fte: 1 },
@@ -25,7 +23,7 @@ const defaultStaff: Staff[] = [
   { name: 'BT-3', category: 'BT-3', fte: 0.5 },
 ];
 
-const defaultShifts: Shift[] = [
+const defaultShifts = [
   { name: 'Regular day', duration: 8, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'AT-C', 'BT-1', 'BT-2', 'BT-3'] },
   { name: 'Evening', duration: 8, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
   { name: 'Night', duration: 11, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
@@ -34,14 +32,15 @@ const defaultShifts: Shift[] = [
   { name: 'Night (Weekend)', duration: 12.5, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
 ];
 
+const staffCategories = ['AT-1', 'AT-2', 'AT-3', 'AT-C', 'BT-1', 'BT-2', 'BT-3'];
+
 export default function Home() {
-  const [date, setDate] = useState<Date | undefined>();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({
     from: undefined,
     to: undefined,
   });
-  const [staff, setStaff] = useState<Staff[]>(defaultStaff);
-  const [shifts, setShifts] = useState<Shift[]>(defaultShifts);
+  const [staff, setStaff] = useState(defaultStaff);
+  const [shifts, setShifts] = useState(defaultShifts);
 
   const formattedDateRange = dateRange.from && dateRange.to
     ? `${format(dateRange.from, 'yyyy-MM-dd')} - ${format(dateRange.to, 'yyyy-MM-dd')}`
@@ -54,236 +53,254 @@ export default function Home() {
     setShifts(defaultShifts);
   };
 
+  const addStaff = () => {
+    setStaff([...staff, { name: '', category: staffCategories[0], fte: 1 }]);
+  };
+
+  const removeStaff = (index: number) => {
+    const newStaff = [...staff];
+    newStaff.splice(index, 1);
+    setStaff(newStaff);
+  };
+
+  const addShift = () => {
+    setShifts([...shifts, { name: '', duration: 8, eligibleStaffCategories: [] }]);
+  };
+
+  const removeShift = (index: number) => {
+    const newShifts = [...shifts];
+    newShifts.splice(index, 1);
+    setShifts(newShifts);
+  };
+
   return (
-    <SidebarProvider>
-      <div className="container flex h-screen mx-auto py-10">
-        <Sidebar className="w-80">
-          <SidebarHeader>
-            <h4 className="font-semibold leading-tight">Settings</h4>
-            <p className="text-sm text-muted-foreground">Manage Roster Configuration</p>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>General</SidebarGroupLabel>
-              <SidebarMenu>
-                <SidebarMenuButton>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Staff</span>
-                </SidebarMenuButton>
-                <SidebarMenuButton>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Shifts</span>
-                </SidebarMenuButton>
-              </SidebarMenu>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter>
-            <SidebarSeparator />
-            <p className="text-xs text-muted-foreground">RosterEase Configuration</p>
-          </SidebarFooter>
-        </Sidebar>
+    <div className="container flex mx-auto py-10">
+      <div className="flex-1 p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>RosterEase</CardTitle>
+            <CardDescription>
+              Generate and manage your staff rosters with ease.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select Date Range</CardTitle>
+                  <CardDescription>Choose the start and end dates for roster generation.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={'outline'}
+                        className={cn(
+                          'w-[240px] justify-start text-left font-normal',
+                          !dateRange.from || !dateRange.to && 'text-muted-foreground'
+                        )}
+                      >
+                        {formattedDateRange === 'Select Date Range' ? (
+                          <span>Select Date Range</span>
+                        ) : (
+                          <span>{formattedDateRange}</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="range"
+                        defaultMonth={dateRange.from ? new Date(dateRange.from) : new Date()}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        disabled={(date) => date > new Date(new Date().setDate(new Date().getDate() + 365)) || date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </CardContent>
+              </Card>
 
-        <div className="flex-1 p-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>RosterEase</CardTitle>
-              <CardDescription>
-                Generate and manage your staff rosters with ease.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Select Date Range</CardTitle>
-                    <CardDescription>Choose the start and end dates for roster generation.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex justify-center">
-                    <Popover>
-                      <PopoverTrigger asChild>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Generate Roster</CardTitle>
+                  <CardDescription>Generate a roster based on selected dates.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button disabled={!isValidDateRange} variant="primary">
+                        Generate
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Confirmation</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to generate a roster for {formattedDateRange}?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <Button
-                          variant={'outline'}
-                          className={cn(
-                            'w-[240px] justify-start text-left font-normal',
-                            !dateRange.from || !dateRange.to && 'text-muted-foreground'
-                          )}
-                        >
-                          {formattedDateRange === 'Select Date Range' ? (
-                            <span>Select Date Range</span>
-                          ) : (
-                            <span>{formattedDateRange}</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="range"
-                          defaultMonth={date ? new Date(date) : new Date()}
-                          selected={dateRange}
-                          onSelect={setDateRange}
-                          disabled={(date) => date > new Date(new Date().setDate(new Date().getDate() + 365)) || date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </CardContent>
-                </Card>
+                          type="submit"
+                          onClick={async () => {
+                            if (dateRange.from && dateRange.to) {
+                              const startDate = format(dateRange.from, 'yyyy-MM-dd');
+                              const endDate = format(dateRange.to, 'yyyy-MM-dd');
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Generate Roster</CardTitle>
-                    <CardDescription>Generate a roster based on selected dates.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button disabled={!isValidDateRange} variant="primary">
+                              const roster = await generateRoster({
+                                startDate: startDate,
+                                endDate: endDate,
+                              });
+                              console.log(roster);
+                              alert('Roster generated successfully!');
+                            }
+                          }}
+                        >
                           Generate
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Confirmation</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to generate a roster for {formattedDateRange}?
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <Button
-                            type="submit"
-                            onClick={async () => {
-                              if (dateRange.from && dateRange.to) {
-                                const startDate = format(dateRange.from, 'yyyy-MM-dd');
-                                const endDate = format(dateRange.to, 'yyyy-MM-dd');
-
-                                const roster = await generateRoster({
-                                  startDate: startDate,
-                                  endDate: endDate,
-                                });
-                                console.log(roster);
-                                alert('Roster generated successfully!');
-                              }
-                            }}
-                          >
-                            Generate
-                          </Button>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Staff Configuration</CardTitle>
-                  <CardDescription>Configure staff details.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {staff.map((s, index) => (
-                    <div key={index} className="mb-4">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Name</label>
-                          <Input
-                            type="text"
-                            value={s.name}
-                            onChange={(e) => {
-                              const newStaff = [...staff];
-                              newStaff[index] = { ...s, name: e.target.value };
-                              setStaff(newStaff);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Category</label>
-                          <Input
-                            type="text"
-                            value={s.category}
-                            onChange={(e) => {
-                              const newStaff = [...staff];
-                              newStaff[index] = { ...s, category: e.target.value };
-                              setStaff(newStaff);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">FTE</label>
-                          <Input
-                            type="number"
-                            value={s.fte.toString()}
-                            onChange={(e) => {
-                              const newStaff = [...staff];
-                              newStaff[index] = { ...s, fte: parseFloat(e.target.value) };
-                              setStaff(newStaff);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </CardContent>
               </Card>
+            </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Shift Configuration</CardTitle>
-                  <CardDescription>Configure shift details.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {shifts.map((shift, index) => (
-                    <div key={index} className="mb-4">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Name</label>
-                          <Input
-                            type="text"
-                            value={shift.name}
-                            onChange={(e) => {
-                              const newShifts = [...shifts];
-                              newShifts[index] = { ...shift, name: e.target.value };
-                              setShifts(newShifts);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Duration</label>
-                          <Input
-                            type="number"
-                            value={shift.duration.toString()}
-                            onChange={(e) => {
-                              const newShifts = [...shifts];
-                              newShifts[index] = { ...shift, duration: parseFloat(e.target.value) };
-                              setShifts(newShifts);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Eligible Categories</label>
-                          <Input
-                            type="text"
-                            value={shift.eligibleStaffCategories.join(', ')}
-                            onChange={(e) => {
-                              const newShifts = [...shifts];
-                              newShifts[index] = { ...shift, eligibleStaffCategories: e.target.value.split(',').map(s => s.trim()) };
-                              setShifts(newShifts);
-                            }}
-                          />
-                        </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Staff Configuration</CardTitle>
+                <CardDescription>Configure staff details.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {staff.map((s, index) => (
+                  <div key={index} className="mb-4 border rounded p-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name</label>
+                        <Input
+                          type="text"
+                          value={s.name}
+                          onChange={(e) => {
+                            const newStaff = [...staff];
+                            newStaff[index] = { ...s, name: e.target.value };
+                            setStaff(newStaff);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Category</label>
+                        <Select onValueChange={(value) => {
+                          const newStaff = [...staff];
+                          newStaff[index] = { ...s, category: value };
+                          setStaff(newStaff);
+                        }}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select a category" defaultValue={s.category} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {staffCategories.map((category) => (
+                              <SelectItem key={category} value={category}>{category}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">FTE</label>
+                        <Select onValueChange={(value) => {
+                          const newStaff = [...staff];
+                            newStaff[index] = { ...s, fte: parseFloat(value) };
+                            setStaff(newStaff);
+                          }}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select FTE" defaultValue={s.fte.toString()} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="0.5">0.5</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                    <Button variant="ghost" size="sm" onClick={() => removeStaff(index)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="secondary" onClick={addStaff}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Staff
+                </Button>
+              </CardContent>
+            </Card>
 
-              <Button variant="secondary" onClick={handleReset}>
-                Reset
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Shift Configuration</CardTitle>
+                <CardDescription>Configure shift details.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {shifts.map((shift, index) => (
+                  <div key={index} className="mb-4 border rounded p-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name</label>
+                        <Input
+                          type="text"
+                          value={shift.name}
+                          onChange={(e) => {
+                            const newShifts = [...shifts];
+                            newShifts[index] = { ...shift, name: e.target.value };
+                            setShifts(newShifts);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Duration</label>
+                        <Input
+                          type="number"
+                          value={shift.duration.toString()}
+                          onChange={(e) => {
+                            const newShifts = [...shifts];
+                            newShifts[index] = { ...shift, duration: parseFloat(e.target.value) };
+                            setShifts(newShifts);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Eligible Categories</label>
+                        <Input
+                          type="text"
+                          value={shift.eligibleStaffCategories.join(', ')}
+                          onChange={(e) => {
+                            const newShifts = [...shifts];
+                            newShifts[index] = { ...shift, eligibleStaffCategories: e.target.value.split(',').map(s => s.trim()) };
+                            setShifts(newShifts);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeShift(index)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="secondary" onClick={addShift}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Shift
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Button variant="secondary" onClick={handleReset}>
+              Reset
+            </Button>
+          </CardContent>
+        </Card>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }
+
