@@ -1,29 +1,58 @@
 "use client";
 
-import {generateRoster} from '@/ai/flows/generate-roster';
-import {Button} from '@/components/ui/button';
-import {Calendar} from '@/components/ui/calendar';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger} from '@/components/ui/alert-dialog';
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import {cn} from '@/lib/utils';
-import {format} from 'date-fns';
-import {useState} from 'react';
-import {Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarSeparator, SidebarTrigger} from '@/components/ui/sidebar';
-import {Settings} from 'lucide-react';
+import { generateRoster } from '@/ai/flows/generate-roster';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { useState } from 'react';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInput, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarSeparator, SidebarTrigger } from '@/components/ui/sidebar';
+import { Settings } from 'lucide-react';
+import { Staff } from '@/services/staff';
+import { Shift } from '@/services/shift';
+import { Input } from '@/components/ui/input';
+
+const defaultStaff: Staff[] = [
+  { name: 'AT-1', category: 'AT-1', fte: 1 },
+  { name: 'AT-2', category: 'AT-2', fte: 1 },
+  { name: 'AT-3', category: 'AT-3', fte: 1 },
+  { name: 'AT-C', category: 'AT-C', fte: 1 },
+  { name: 'BT-1', category: 'BT-1', fte: 1 },
+  { name: 'BT-2', category: 'BT-2', fte: 0.5 },
+  { name: 'BT-3', category: 'BT-3', fte: 0.5 },
+];
+
+const defaultShifts: Shift[] = [
+  { name: 'Regular day', duration: 8, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'AT-C', 'BT-1', 'BT-2', 'BT-3'] },
+  { name: 'Evening', duration: 8, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
+  { name: 'Night', duration: 11, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
+  { name: 'Clinic', duration: 8.5, eligibleStaffCategories: ['AT-C', 'AT-1', 'AT-2', 'AT-3'] },
+  { name: 'Day (Weekend)', duration: 12.5, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
+  { name: 'Night (Weekend)', duration: 12.5, eligibleStaffCategories: ['AT-1', 'AT-2', 'AT-3', 'BT-1', 'BT-2', 'BT-3'] },
+];
 
 export default function Home() {
   const [date, setDate] = useState<Date | undefined>();
-  const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>({
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({
     from: undefined,
     to: undefined,
   });
+  const [staff, setStaff] = useState<Staff[]>(defaultStaff);
+  const [shifts, setShifts] = useState<Shift[]>(defaultShifts);
 
   const formattedDateRange = dateRange.from && dateRange.to
     ? `${format(dateRange.from, 'yyyy-MM-dd')} - ${format(dateRange.to, 'yyyy-MM-dd')}`
     : 'Select Date Range';
 
   const isValidDateRange = dateRange.from && dateRange.to && dateRange.to > dateRange.from;
+
+  const handleReset = () => {
+    setStaff(defaultStaff);
+    setShifts(defaultShifts);
+  };
 
   return (
     <SidebarProvider>
@@ -38,18 +67,18 @@ export default function Home() {
               <SidebarGroupLabel>General</SidebarGroupLabel>
               <SidebarMenu>
                 <SidebarMenuButton>
-                  <Settings className="mr-2 h-4 w-4"/>
+                  <Settings className="mr-2 h-4 w-4" />
                   <span>Staff</span>
                 </SidebarMenuButton>
                 <SidebarMenuButton>
-                  <Settings className="mr-2 h-4 w-4"/>
+                  <Settings className="mr-2 h-4 w-4" />
                   <span>Shifts</span>
                 </SidebarMenuButton>
               </SidebarMenu>
             </SidebarGroup>
           </SidebarContent>
           <SidebarFooter>
-            <SidebarSeparator/>
+            <SidebarSeparator />
             <p className="text-xs text-muted-foreground">RosterEase Configuration</p>
           </SidebarFooter>
         </Sidebar>
@@ -145,6 +174,112 @@ export default function Home() {
                   </CardContent>
                 </Card>
               </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Staff Configuration</CardTitle>
+                  <CardDescription>Configure staff details.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {staff.map((s, index) => (
+                    <div key={index} className="mb-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Name</label>
+                          <Input
+                            type="text"
+                            value={s.name}
+                            onChange={(e) => {
+                              const newStaff = [...staff];
+                              newStaff[index] = { ...s, name: e.target.value };
+                              setStaff(newStaff);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Category</label>
+                          <Input
+                            type="text"
+                            value={s.category}
+                            onChange={(e) => {
+                              const newStaff = [...staff];
+                              newStaff[index] = { ...s, category: e.target.value };
+                              setStaff(newStaff);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">FTE</label>
+                          <Input
+                            type="number"
+                            value={s.fte.toString()}
+                            onChange={(e) => {
+                              const newStaff = [...staff];
+                              newStaff[index] = { ...s, fte: parseFloat(e.target.value) };
+                              setStaff(newStaff);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Shift Configuration</CardTitle>
+                  <CardDescription>Configure shift details.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {shifts.map((shift, index) => (
+                    <div key={index} className="mb-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Name</label>
+                          <Input
+                            type="text"
+                            value={shift.name}
+                            onChange={(e) => {
+                              const newShifts = [...shifts];
+                              newShifts[index] = { ...shift, name: e.target.value };
+                              setShifts(newShifts);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Duration</label>
+                          <Input
+                            type="number"
+                            value={shift.duration.toString()}
+                            onChange={(e) => {
+                              const newShifts = [...shifts];
+                              newShifts[index] = { ...shift, duration: parseFloat(e.target.value) };
+                              setShifts(newShifts);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Eligible Categories</label>
+                          <Input
+                            type="text"
+                            value={shift.eligibleStaffCategories.join(', ')}
+                            onChange={(e) => {
+                              const newShifts = [...shifts];
+                              newShifts[index] = { ...shift, eligibleStaffCategories: e.target.value.split(',').map(s => s.trim()) };
+                              setShifts(newShifts);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Button variant="secondary" onClick={handleReset}>
+                Reset
+              </Button>
             </CardContent>
           </Card>
         </div>
