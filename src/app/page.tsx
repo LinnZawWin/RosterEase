@@ -131,7 +131,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle>RosterEase</CardTitle>
             <CardDescription>
-              Generate and manage your staff rosters with ease.
+              Generate and manage your staff rosters with ease.....
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
