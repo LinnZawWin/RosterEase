@@ -25,12 +25,12 @@ const defaultStaff = [
 ];
 
 const defaultShifts = [
-  { name: 'Regular day', startTime: '08:00', endTime: '16:00' },
-  { name: 'Evening', startTime: '14:00', endTime: '22:00' },
-  { name: 'Night', startTime: '21:30', endTime: '08:30' },
-  { name: 'Clinic', startTime: '08:00', endTime: '16:30' },
-  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30' },
-  { name: 'Night (Weekend)', startTime: '08:00', endTime: '08:30' },
+  { name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8 },
+  { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8 },
+  { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11 },
+  { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5 },
+  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5 },
+  { name: 'Night (Weekend)', startTime: '08:00', endTime: '08:30', duration: 24.5 },
 ];
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -100,8 +100,8 @@ export default function Home() {
 
 
   const addShift = () => {
-    setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00' }]);
-  };
+      setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00', duration: 8 }]);
+    };
 
   const removeShift = (index: number) => {
     const newShifts = [...shifts];
@@ -124,6 +124,30 @@ export default function Home() {
     setShifts(newShifts);
   };
 
+  async function generateRoster({ startDate, endDate }: { startDate: string; endDate: string; }) {
+    // Simulate roster generation logic
+    const roster = {
+      startDate,
+      endDate,
+      staff: staff.map((s) => ({
+        name: s.name,
+        category: s.category,
+        fte: s.fte,
+      })),
+      shifts: shifts.map((shift) => ({
+        name: shift.name,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        duration: shift.duration,
+      })),
+    };
+
+    // Simulate a delay to mimic an API call or heavy computation
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    return roster;
+  }
+
   return (
     <div className="container flex mx-auto py-10">
       <div className="flex-1 p-4">
@@ -131,7 +155,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle>RosterEase</CardTitle>
             <CardDescription>
-              Generate and manage your staff rosters with ease.....
+              Generate and manage your staff rosters with ease...
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -321,7 +345,7 @@ export default function Home() {
                       mode="range"
                       defaultMonth={dateRange.from ? new Date(dateRange.from) : new Date()}
                       selected={dateRange}
-                      onSelect={setDateRange}
+                      onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
                       disabled={(date) => date > new Date(new Date().setDate(new Date().getDate() + 365)) || date < new Date()}
                       initialFocus
                     />
@@ -331,7 +355,7 @@ export default function Home() {
             </Card>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button disabled={!isValidDateRange} variant="primary">
+                <Button disabled={!isValidDateRange} variant="default">
                   Generate Roster
                 </Button>
               </AlertDialogTrigger>
