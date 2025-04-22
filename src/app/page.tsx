@@ -1,6 +1,5 @@
 "use client";
 
-import { generateRoster } from '@/ai/flows/generate-roster';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
