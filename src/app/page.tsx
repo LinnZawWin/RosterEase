@@ -220,197 +220,326 @@ export default function Home() {
   
   async function generateRoster({ startDate, endDate }: { startDate: string; endDate: string; }) {
     const roster = {
-      startDate,
-      endDate,
-      staff: staff.map((s) => ({
-        name: s.name,
-        category: s.category,
-        fte: s.fte,
-      })),
-      shifts: shifts.map((shift) => ({
-        name: shift.name,
-        startTime: shift.startTime,
-        endTime: shift.endTime,
-        duration: shift.duration,
-        days: shift.days,
-        categories: shift.categories,
-      })),
+      shifts: defaultShifts,
+      staff: defaultStaff,
     };
-  
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  
+
     const calendarData = [];
     let currentDate = new Date(startDate);
-  
-    // Structure to track special rule assignments
-    // For each rule, track which staff is currently assigned, how many consecutive days completed,
-    // and which staff are in their gap period and for how many more days
+
+    // Split tracking into consecutive and gap tracking
     const ruleTracking: {
-      [ruleId: string]: {
-        activeAssignment: {
-          staffName: string | null,
-          consecutiveDaysCompleted: number,
-        },
-        staffInGapPeriod: {
-          [staffName: string]: number  // Days remaining in gap period
-        }
-      }
-    } = {};
-  
-    // Initialize rule tracking
-    specialRules.forEach((_, index) => {
+      consecutive: { [key: string]: { currentStaff: string | null; daysRemaining: number } };
+      gap: { [key: string]: { [staffName: string]: number } };
+    } = {
+      consecutive: {},
+      gap: {}
+    };
+
+    // Initialize separate tracking for consecutive and gap periods
+    specialRules.forEach((rule, index) => {
       const ruleId = `rule_${index}`;
-      ruleTracking[ruleId] = {
-        activeAssignment: {
-          staffName: null,
-          consecutiveDaysCompleted: 0
-        },
-        staffInGapPeriod: {}
+      
+      // For consecutive day tracking
+      ruleTracking.consecutive[ruleId] = {
+        currentStaff: null,
+        daysRemaining: 0
       };
+      
+      // For gap day tracking - track by staff name
+      ruleTracking.gap[ruleId] = {};
     });
-  
+
+    const workingHoursTracker = initializeWorkingHoursTracker();
+
     while (currentDate <= new Date(endDate)) {
       const dayOfWeek = format(currentDate, 'EEE');
       const dateStr = format(currentDate, 'yyyy-MM-dd');
-      
-      // Decrement gap days for all staff in gap period
-      Object.keys(ruleTracking).forEach(ruleId => {
-        Object.keys(ruleTracking[ruleId].staffInGapPeriod).forEach(staffName => {
-          ruleTracking[ruleId].staffInGapPeriod[staffName]--;
-          if (ruleTracking[ruleId].staffInGapPeriod[staffName] <= 0) {
-            delete ruleTracking[ruleId].staffInGapPeriod[staffName];
-          }
-        });
-      });
-  
-      const applicableShifts = roster.shifts.filter((shift) => shift.days?.includes(dayOfWeek));
+
+      // Update gap days tracking - decrement for each staff in gap period
+      updateGapDaysTracking(ruleTracking.gap);
+
+      const applicableShifts = getApplicableShiftsForDay(roster.shifts, dayOfWeek);
       const assignedStaff = new Set<string>();
-  
+
       const dayRoster = {
         date: dateStr,
         shifts: applicableShifts.map((shift) => {
-          // Handle fixed shifts
-          const fixedShift = fixedShifts.find(
-            (fs) => fs.shift === shift.name && fs.days.includes(dayOfWeek)
+          // Process fixed shifts and special rules as before
+          const fixedShiftResult = processFixedShift(shift, dayOfWeek, roster, assignedStaff);
+          if (fixedShiftResult) 
+          {
+            const selectedStaff = fixedShiftResult.staff[0]; // Ensure selectedStaff is defined
+            updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
+            return fixedShiftResult;
+          }
+
+          const specialRuleResult = processSpecialRuleConsecutiveDays(
+            shift,
+            dayOfWeek,
+            ruleTracking,
+            roster,
+            assignedStaff
           );
-  
-          if (fixedShift) {
-            const fixedStaffMember = roster.staff.find((s) => s.name === fixedShift.staff);
-            if (fixedStaffMember) {
-              assignedStaff.add(fixedStaffMember.name);
-              return { ...shift, staff: [fixedStaffMember] };
-            }
+
+          if (specialRuleResult) 
+          {
+            const selectedStaff = specialRuleResult.staff[0]; // Ensure selectedStaff is defined
+            updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
+            return specialRuleResult;
           }
-  
-          // Check if this shift belongs to a special rule
-          let ruleForShift: string | null = null;
-          let ruleConfig = null;
-  
-          for (let i = 0; i < specialRules.length; i++) {
-            const rule = specialRules[i];
-            const ruleId = `rule_${i}`;
-            
-            if (rule.shifts.includes(shift.name)) {
-              ruleForShift = ruleId;
-              ruleConfig = rule;
-              break;
-            }
-          }
-  
-          // If this shift belongs to a special rule
-          if (ruleForShift && ruleConfig) {
-            const tracking = ruleTracking[ruleForShift];
-            
-            // Case 1: We have an active staff assignment for this rule
-            if (tracking.activeAssignment.staffName) {
-              const activeStaff = roster.staff.find(s => s.name === tracking.activeAssignment.staffName);
-              
-              // Check if the active staff can work this shift
-              if (activeStaff && 
-                  shift.categories?.includes(activeStaff.category) && 
-                  !assignedStaff.has(activeStaff.name) &&
-                  !shiftExceptions.some(ex => 
-                    ex.staff === activeStaff.name && 
-                    ex.shift === shift.name && 
-                    ex.days.includes(dayOfWeek)
-                  )) {
-                
-                // Assign the active staff to this shift
-                assignedStaff.add(activeStaff.name);
-                tracking.activeAssignment.consecutiveDaysCompleted++;
-                
-                // Check if they've completed their consecutive days requirement
-                if (tracking.activeAssignment.consecutiveDaysCompleted >= ruleConfig.consecutiveDays) {
-                  // Start their gap period
-                  tracking.staffInGapPeriod[activeStaff.name] = ruleConfig.gapDays;
-                  // Reset active assignment
-                  tracking.activeAssignment.staffName = null;
-                  tracking.activeAssignment.consecutiveDaysCompleted = 0;
-                }
-                
-                return { ...shift, staff: [activeStaff] };
-              } else {
-                // If the active staff can't work this shift, we need to try another staff
-                // but we don't reset the active assignment
-              }
-            }
-            
-            // Case 2: We need to start a new staff assignment
-            // Find a suitable staff member who isn't in gap period and matches the category
-            const eligibleStaff = roster.staff.filter(s => 
-              shift.categories?.includes(s.category) &&
-              !assignedStaff.has(s.name) &&
-              !tracking.staffInGapPeriod[s.name] &&
-              !shiftExceptions.some(ex => 
-                ex.staff === s.name && 
-                ex.shift === shift.name && 
-                ex.days.includes(dayOfWeek)
-              )
-            );
-            
-            if (eligibleStaff.length > 0) {
-              // Choose a staff member randomly
-              const chosenStaff = eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)];
-              assignedStaff.add(chosenStaff.name);
-              
-              // Set as the active assignment for this rule
-              if (!tracking.activeAssignment.staffName) {
-                tracking.activeAssignment.staffName = chosenStaff.name;
-                tracking.activeAssignment.consecutiveDaysCompleted = 1;
-              }
-              
-              return { ...shift, staff: [chosenStaff] };
-            }
-          }
-  
-          // Regular shift assignment (not part of special rule or no eligible staff found)
-          const availableStaff = roster.staff.filter(
-            (s) =>
-              shift.categories?.includes(s.category) &&
-              !assignedStaff.has(s.name) &&
-              !shiftExceptions.some(
-                (exception) =>
-                  exception.staff === s.name &&
-                  exception.shift === shift.name &&
-                  exception.days.includes(dayOfWeek)
-              )
+
+          return assignNormally(
+            shift,
+            dayOfWeek,
+            ruleTracking,
+            roster,
+            assignedStaff,
+            workingHoursTracker,
+            dateStr
           );
-  
-          if (availableStaff.length > 0) {
-            const randomStaff = availableStaff[Math.floor(Math.random() * availableStaff.length)];
-            assignedStaff.add(randomStaff.name);
-            return { ...shift, staff: [randomStaff] };
-          }
-  
-          return { ...shift, staff: [] };
         }),
       };
-  
+
       calendarData.push(dayRoster);
       currentDate.setDate(currentDate.getDate() + 1);
     }
-  
+
     return { ...roster, calendarData };
+  }
+
+  function initializeWorkingHoursTracker() {
+    const tracker: { [key: string]: number } = {};
+    defaultStaff.forEach((staff) => {
+      tracker[staff.name] = 0;
+    });
+    return tracker;
+  }
+
+  function updateGapDaysTracking(gapTracking: any) {
+    // For each rule
+    Object.keys(gapTracking).forEach((ruleId) => {
+      // For each staff in gap period for this rule
+      Object.keys(gapTracking[ruleId]).forEach((staffName) => {
+        gapTracking[ruleId][staffName]--;
+        
+        // If gap period is over, remove staff from gap tracking
+        if (gapTracking[ruleId][staffName] <= 0) {
+          delete gapTracking[ruleId][staffName];
+        }
+      });
+    });
+  }
+
+  function getApplicableShiftsForDay(shifts: any[], dayOfWeek: string) {
+    const specialRuleShifts = specialRules.flatMap((rule) => rule.shifts);
+    return shifts
+      .filter((shift) => shift.days?.includes(dayOfWeek))
+      .sort((a, b) => {
+        const aIsSpecial = specialRuleShifts.includes(a.name);
+        const bIsSpecial = specialRuleShifts.includes(b.name);
+        if (aIsSpecial && !bIsSpecial) return -1;
+        if (!aIsSpecial && bIsSpecial) return 1;
+        return 0;
+      });
+  }
+
+  function processFixedShift(shift: any, dayOfWeek: string, roster: any, assignedStaff: Set<string>) {
+    const fixedShift = defaultFixedShifts.find(
+      (fs) => fs.shift === shift.name && fs.days.includes(dayOfWeek)
+    );
+
+    if (fixedShift) {
+      const fixedStaffMember = roster.staff.find((s: any) => s.name === fixedShift.staff);
+      if (fixedStaffMember) {
+        assignedStaff.add(fixedStaffMember.name);
+        return { ...shift, staff: [fixedStaffMember] };
+      }
+    }
+    return null;
+  }
+
+  function processSpecialRuleConsecutiveDays(
+    shift: any,
+    dayOfWeek: string,
+    ruleTracking: any,
+    roster: any,
+    assignedStaff: Set<string>
+  ) {
+    let ruleId = null;
+    let ruleConfig = null;
+
+    for (let i = 0; i < specialRules.length; i++) {
+      if (specialRules[i].shifts.includes(shift.name)) {
+        ruleId = `rule_${i}`;
+        ruleConfig = specialRules[i];
+        break;
+      }
+    }
+
+    if (ruleId && ruleConfig) {
+      const consecutiveTracking = ruleTracking.consecutive[ruleId];
+      const gapTracking = ruleTracking.gap[ruleId];
+
+      // Step 1: Check if we have an active staff member in consecutive assignment
+      if (consecutiveTracking.currentStaff && consecutiveTracking.daysRemaining > 0) {
+        const currentStaffMember = roster.staff.find((s: any) => s.name === consecutiveTracking.currentStaff);
+        
+        if (
+          currentStaffMember &&
+          shift.categories?.includes(currentStaffMember.category) &&
+          !assignedStaff.has(currentStaffMember.name) &&
+          !isStaffInShiftException(currentStaffMember.name, shift.name, dayOfWeek)
+        ) {
+          // Continue the consecutive assignment
+          assignedStaff.add(currentStaffMember.name);
+          consecutiveTracking.daysRemaining--;
+          console.log(`Day: ${dayOfWeek}, Current Staff: ${currentStaffMember.name}, Days Remaining: ${consecutiveTracking.daysRemaining}`);
+          // If they've completed their consecutive days, move them to gap period
+          if (consecutiveTracking.daysRemaining === 0) {
+            // Start gap period for this staff member
+            gapTracking[currentStaffMember.name] = ruleConfig.gapDays;
+            // Reset consecutive tracking
+            consecutiveTracking.currentStaff = null;
+          }
+          
+          return { ...shift, staff: [currentStaffMember] };
+        }
+      }
+      
+      // Step 2: If no active staff or current one can't work, find a new eligible staff
+      const eligibleStaff = roster.staff.filter(
+        (s: any) =>
+          shift.categories?.includes(s.category) &&
+          !assignedStaff.has(s.name) &&
+          !isStaffInShiftException(s.name, shift.name, dayOfWeek) &&
+          !gapTracking[s.name] // Not in gap period
+      );
+      
+      if (eligibleStaff.length > 0) {
+        // Select a new staff member randomly
+        const selectedStaff = eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)];
+        assignedStaff.add(selectedStaff.name);
+        
+        // Start a new consecutive assignment
+        consecutiveTracking.currentStaff = selectedStaff.name;
+        consecutiveTracking.daysRemaining = ruleConfig.consecutiveDays - 1; // Already worked one day
+        console.log(`Day: ${dayOfWeek}, Current Staff: ${consecutiveTracking.currentStaff}, Days Remaining: ${consecutiveTracking.daysRemaining}`);
+        return { ...shift, staff: [selectedStaff] };
+      }
+    }
+    
+    return null;
+  }
+
+  function assignNormally(
+    shift: any,
+    dayOfWeek: string,
+    ruleTracking: any,
+    roster: any,
+    assignedStaff: Set<string>,
+    workingHoursTracker: any,
+    dateStr: string
+  ) {
+    const availableStaff = getAvailableStaff(shift, dayOfWeek, roster, assignedStaff, ruleTracking);
+
+    const sortedStaff = sortStaffByWorkingHours(availableStaff, workingHoursTracker, dateStr);
+
+    if (sortedStaff.length > 0) {
+      const selectedStaff = selectStaffWithLowestHours(sortedStaff);
+      assignedStaff.add(selectedStaff.name);
+
+      updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
+
+      startConsecutiveDayTrackingIfApplicable(
+        shift,
+        ruleTracking,
+        selectedStaff,
+        sortedStaff.length === 1
+      );
+
+      return { ...shift, staff: [selectedStaff] };
+    }
+
+    return { ...shift, staff: [] };
+  }
+
+  function getAvailableStaff(
+    shift: any,
+    dayOfWeek: string,
+    roster: any,
+    assignedStaff: Set<string>,
+    ruleTracking: any
+  ) {
+    return roster.staff.filter(
+      (s: any) =>
+        shift.categories?.includes(s.category) &&
+        !assignedStaff.has(s.name) &&
+        !isStaffInShiftException(s.name, shift.name, dayOfWeek) &&
+        !isStaffInSpecialRuleGapDays(s.name, shift.name, ruleTracking)
+    );
+  }
+
+  function isStaffInShiftException(staffName: string, shiftName: string, dayOfWeek: string) {
+    return defaultShiftExceptions.some(
+      (ex) => ex.staff === staffName && ex.shift === shiftName && ex.days.includes(dayOfWeek)
+    );
+  }
+
+  function isStaffInSpecialRuleGapDays(staffName: string, shiftName: string, ruleTracking: any) {
+    // Check if staff is in gap period for any rule that covers this shift
+    for (let i = 0; i < specialRules.length; i++) {
+      if (specialRules[i].shifts.includes(shiftName)) {
+        const ruleId = `rule_${i}`;
+        if (ruleTracking.gap[ruleId] && ruleTracking.gap[ruleId][staffName] > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function sortStaffByWorkingHours(availableStaff: any[], workingHoursTracker: any, dateStr: string) {
+    const staffWithHours = availableStaff.map((staff) => ({
+      ...staff,
+      hours: calculateWorkingHours(staff, dateStr, workingHoursTracker),
+    }));
+  
+    return staffWithHours.sort((a, b) => a.hours - b.hours);
+  }
+
+  function calculateWorkingHours(staff: any, dateStr: string, workingHoursTracker: any) {
+    return workingHoursTracker[staff.name];
+  }
+
+  function selectStaffWithLowestHours(sortedStaff: any[]) {
+    const lowestHours = sortedStaff[0].hours;
+    const candidates = sortedStaff.filter((s) => s.hours === lowestHours);
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function updateWorkingHoursTracker(workingHoursTracker: any, staff: any, shift: any) {
+    const hours = shift.duration / staff.fte;
+    workingHoursTracker[staff.name] += hours;
+  }
+
+  function startConsecutiveDayTrackingIfApplicable(
+    shift: any,
+    ruleTracking: any,
+    selectedStaff: any,
+    isSingleCandidate: boolean
+  ) {
+    if (isSingleCandidate) {
+      const ruleId = Object.keys(ruleTracking).find((id) =>
+        specialRules[parseInt(id.split('_')[1])] && specialRules[parseInt(id.split('_')[1])].shifts.includes(shift.name)
+      );
+
+      if (ruleId) {
+        const tracking = ruleTracking[ruleId];
+        tracking.currentStaff = selectedStaff.name;
+        tracking.daysRemaining = specialRules[parseInt(ruleId.split('_')[1])].consecutiveDays - 1;
+      }
+    }
   }
 
   return (
@@ -420,7 +549,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle>RosterEase</CardTitle>
             <CardDescription>
-              Generate and manage your staff rosters with ease.
+              Generate and manage your staff rosters with ease..
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -1045,65 +1174,71 @@ export default function Home() {
           <CardContent>
             {dateRange.from && dateRange.to ? (
               <div className="overflow-x-auto">
-          <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
-            <thead>
-              <tr>
-                <th className="border border-gray-300 p-2 bg-gray-100">Date</th>
-                {staff.map((s) => (
-            <th key={s.name} className="border border-gray-300 p-2 bg-gray-100">
-              {s.name}
-            </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                const rows = [];
-                let currentDate = new Date(dateRange.from);
-                const accumulatedHours: { [key: string]: number } = {};
+              <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+                <thead>
+                <tr>
+                  <th className="border border-gray-300 p-2 bg-gray-100">Date</th>
+                  {staff.map((s) => (
+                  <th key={s.name} className="border border-gray-300 p-2 bg-gray-100">
+                    {s.name} ({s.fte})
+                  </th>
+                  ))}
+                </tr>
+                </thead>
+                <tbody>
+                {(() => {
+                  const rows = [];
+                  let currentDate = new Date(dateRange.from);
+                  const accumulatedHours: { [key: string]: number } = {};
 
-                // Initialize accumulated hours for each staff
-                staff.forEach((s) => {
-            accumulatedHours[s.name] = 0;
-                });
+                  // Initialize accumulated hours for each staff
+                  staff.forEach((s) => {
+                  accumulatedHours[s.name] = 0;
+                  });
 
-                while (currentDate <= dateRange.to) {
-            const formattedDate = format(currentDate, 'yyyy-MM-dd');
-            const dayRoster = calendarData.find((d) => d.date === formattedDate);
+                  while (currentDate <= dateRange.to) {
+                  const formattedDate = format(currentDate, 'yyyy-MM-dd');
+                  const dayRoster = calendarData.find((d) => d.date === formattedDate);
 
-            const row = (
-              <tr key={formattedDate}>
-                <td className="border border-gray-300 p-2">{formattedDate}</td>
-                {staff.map((s) => {
-                  const dailyHours = dayRoster
-              ? dayRoster.shifts.reduce((total: number, shift: ShiftWithStaff) => {
-                  if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
-                    return total + shift.duration;
-                  }
-                  return total;
-                }, 0)
-              : 0;
+                  const row = (
+                    <tr key={formattedDate}>
+                    <td className="border border-gray-300 p-2">{formattedDate}</td>
+                    {staff.map((s) => {
+                      const dailyHours = dayRoster
+                      ? dayRoster.shifts.reduce((total: number, shift: ShiftWithStaff) => {
+                        if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
+                          return total + shift.duration;
+                        }
+                        return total;
+                        }, 0)
+                      : 0;
 
-                  // Add daily hours to accumulated hours
-                  accumulatedHours[s.name] += dailyHours;
+                      // Add daily hours to accumulated hours
+                      accumulatedHours[s.name] += dailyHours;
 
-                  return (
-              <td key={s.name} className="border border-gray-300 p-2 text-center">
-                {accumulatedHours[s.name]}
-              </td>
+                      const adjustedHours = s.fte < 1 ? accumulatedHours[s.name] / s.fte : accumulatedHours[s.name];
+                      const displayValue =
+                      s.fte < 1
+                        ? `${adjustedHours} (${accumulatedHours[s.name]})`
+                        : `${accumulatedHours[s.name]}`;
+
+                      return (
+                      <td key={s.name} className="border border-gray-300 p-2 text-center">
+                        {displayValue}
+                      </td>
+                      );
+                    })}
+                    </tr>
                   );
-                })}
-              </tr>
-            );
 
-            rows.push(row);
-            currentDate.setDate(currentDate.getDate() + 1);
-                }
+                  rows.push(row);
+                  currentDate.setDate(currentDate.getDate() + 1);
+                  }
 
-                return rows;
-              })()}
-            </tbody>
-          </table>
+                  return rows;
+                })()}
+                </tbody>
+              </table>
               </div>
             ) : (
               <p className="text-gray-500">No data available. Please generate a roster to view accumulated hours.</p>
