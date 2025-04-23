@@ -3,14 +3,12 @@
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { format, parse } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, getDay, parse } from 'date-fns';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Trash2 } from 'lucide-react';
+import ReactSelect from 'react-select';
 
 const defaultCategories = ['AT', 'AT-C', 'BT'];
 
@@ -25,12 +23,12 @@ const defaultStaff = [
 ];
 
 const defaultShifts = [
-  { name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8 },
-  { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8 },
-  { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11 },
-  { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5 },
-  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5 },
-  { name: 'Night (Weekend)', startTime: '08:00', endTime: '08:30', duration: 24.5 },
+  { name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+  { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+  { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+  { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun'] },
+  { name: 'Night (Weekend)', startTime: '08:00', endTime: '08:30', duration: 24.5, days: ['Sat', 'Sun'] },
 ];
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -38,6 +36,31 @@ const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const minute = (i % 2 === 0) ? '00' : '30';
   return `${hour}:${minute}`;
 });
+
+const daysOfWeekOptions = [
+  { value: 'Sun', label: 'Sunday' },
+  { value: 'Mon', label: 'Monday' },
+  { value: 'Tue', label: 'Tuesday' },
+  { value: 'Wed', label: 'Wednesday' },
+  { value: 'Thu', label: 'Thursday' },
+  { value: 'Fri', label: 'Friday' },
+  { value: 'Sat', label: 'Saturday' },
+];
+
+type Staff = {
+  name: string;
+  category: string;
+  fte: number;
+};
+
+type ShiftWithStaff = {
+  name: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  staff: Staff[];
+  days?: (string | never)[]; // Explicitly define the type of 'days' as an array of strings or never
+};
 
 export default function Home() {
   const [categories, setCategories] = useState(defaultCategories);
@@ -47,6 +70,16 @@ export default function Home() {
   });
   const [staff, setStaff] = useState(defaultStaff);
   const [shifts, setShifts] = useState(defaultShifts);
+  const [calendarData, setCalendarData] = useState<any[]>([]);
+
+  const shiftColors: { [key: string]: string } = {
+    'Regular day': 'bg-blue-500',
+    'Evening': 'bg-green-500',
+    'Night': 'bg-red-500',
+    'Clinic': 'bg-yellow-500',
+    'Day (Weekend)': 'bg-purple-500',
+    'Night (Weekend)': 'bg-pink-500',
+  };
 
   const formattedDateRange = dateRange.from && dateRange.to
     ? `${format(dateRange.from, 'yyyy-MM-dd')} - ${format(dateRange.to, 'yyyy-MM-dd')}`
@@ -98,10 +131,9 @@ export default function Home() {
     return duration;
   };
 
-
   const addShift = () => {
-      setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00', duration: 8 }]);
-    };
+    setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00', duration: 8, days: [] }]);
+  };
 
   const removeShift = (index: number) => {
     const newShifts = [...shifts];
@@ -124,6 +156,12 @@ export default function Home() {
     setShifts(newShifts);
   };
 
+  const updateShiftDays = (index: number, selectedDays: any) => {
+    const newShifts = [...shifts];
+    newShifts[index].days = selectedDays.map((day: any) => day.value);
+    setShifts(newShifts);
+  };
+
   async function generateRoster({ startDate, endDate }: { startDate: string; endDate: string; }) {
     // Simulate roster generation logic
     const roster = {
@@ -139,13 +177,60 @@ export default function Home() {
         startTime: shift.startTime,
         endTime: shift.endTime,
         duration: shift.duration,
+        days: shift.days, // Include the days property for filtering
       })),
     };
 
     // Simulate a delay to mimic an API call or heavy computation
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    return roster;
+    // Generate calendar data
+    const calendarData = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= new Date(endDate)) {
+      const dayOfWeek = format(currentDate, 'EEE'); // Get the day of the week (e.g., 'Mon', 'Tue')
+      
+      // Filter shifts based on the day of the week
+      const applicableShifts = roster.shifts.filter((shift) => shift.days?.includes(dayOfWeek));
+      console.debug(`Day of Week: ${dayOfWeek}`);
+      console.debug('Applicable Shifts:', applicableShifts);
+      const assignedStaff = new Set<string>(); // Track assigned staff to avoid duplicates
+
+      const dayRoster = {
+        date: format(currentDate, 'yyyy-MM-dd'),
+        shifts: applicableShifts.map((shift) => {
+          // Filter available staff who are not yet assigned for the day
+          const availableStaff = roster.staff.filter((s) => !assignedStaff.has(s.name));
+
+          // Randomly select a staff member for the shift
+          const randomStaff =
+            availableStaff.length > 0
+              ? availableStaff[Math.floor(Math.random() * availableStaff.length)]
+              : null;
+
+          if (randomStaff) {
+            assignedStaff.add(randomStaff.name); // Mark the staff as assigned
+          }
+
+          return {
+            ...shift,
+            staff: randomStaff ? [randomStaff] : [], // Assign the selected staff or leave empty
+          };
+        }),
+      };
+
+      // Add all applicable shifts for the day, even if no staff is assigned
+      dayRoster.shifts = applicableShifts.map((shift) => ({
+        ...shift,
+        staff: dayRoster.shifts.find((s) => s.name === shift.name)?.staff || [],
+      }));
+
+      calendarData.push(dayRoster);
+      currentDate.setDate(currentDate.getDate() + 1); // Move to the next day
+    }
+
+    return { ...roster, calendarData };
   }
 
   return (
@@ -155,7 +240,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle>RosterEase</CardTitle>
             <CardDescription>
-              Generate and manage your staff rosters with ease...
+              Generate and manage your staff rosters with ease......
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -252,12 +337,12 @@ export default function Home() {
             <Card>
               <CardHeader>
                 <CardTitle>Shift Configuration</CardTitle>
-                <CardDescription>Configure shift details.</CardDescription>
+                <CardDescription>Configure shift details, including applicable days.</CardDescription>
               </CardHeader>
               <CardContent>
                 {shifts.map((shift, index) => (
                   <div key={index} className="mb-4 border rounded p-4">
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Name</label>
                         <Input
@@ -266,6 +351,16 @@ export default function Home() {
                           onChange={(e) => updateShift(index, 'name', e.target.value)}
                         />
                       </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700">Days</label>
+                        <ReactSelect
+                          isMulti
+                          options={daysOfWeekOptions}
+                          value={daysOfWeekOptions.filter((option) => shift.days?.includes(option.value))}
+                          onChange={(newValue) => updateShiftDays(index, Array.isArray(newValue) ? [...newValue] : [])}
+                          placeholder="Select days"
+                        />
+                        </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Start Time</label>
                         <Select
@@ -298,14 +393,6 @@ export default function Home() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Duration</label>
-                        <Input
-                          type="number"
-                          value={calculateDuration(shift.startTime, shift.endTime).toString()}
-                          readOnly
-                        />
-                      </div>
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => removeShift(index)}>
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -323,74 +410,212 @@ export default function Home() {
               Reset Configuration
             </Button>
             <Card>
-              <CardContent className="flex justify-center">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={'outline'}
-                      className={cn(
-                        'w-[240px] justify-start text-left font-normal',
-                        !dateRange.from || !dateRange.to && 'text-muted-foreground'
-                      )}
-                    >
-                      {formattedDateRange === 'Select Date Range' ? (
-                        <span>Select Date Range</span>
-                      ) : (
-                        <span>{formattedDateRange}</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="range"
-                      defaultMonth={dateRange.from ? new Date(dateRange.from) : new Date()}
-                      selected={dateRange}
-                      onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
-                      disabled={(date) => date > new Date(new Date().setDate(new Date().getDate() + 365)) || date < new Date()}
-                      initialFocus
+              <CardContent className="flex flex-col items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <label className="block text-sm font-medium text-gray-700">Date Range:</label>
+                    <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
+                      onChange={(e) => {
+                      const newFromDate = e.target.value ? new Date(e.target.value) : undefined;
+                      if (newFromDate && newFromDate <= new Date()) {
+                      alert('From date must be later than the current date.');
+                      return;
+                      }
+                      setDateRange((prev) => {
+                      const newToDate = newFromDate
+                      ? new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1)
+                      : undefined;
+                      return { from: newFromDate, to: newToDate };
+                      });
+                      }}
+                      min={format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd')} // Disable dates earlier than tomorrow
                     />
-                  </PopoverContent>
-                </Popover>
+                    <Input
+                      type="date"
+                      value={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
+                      onChange={(e) => {
+                      const newToDate = e.target.value ? new Date(e.target.value) : undefined;
+                      if (newToDate && dateRange.from && newToDate <= dateRange.from) {
+                      alert('To date must be later than the From date.');
+                      return;
+                      }
+                      setDateRange((prev) => ({ ...prev, to: newToDate }));
+                      }}
+                      min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd')} // Disable dates earlier than 'from' date or tomorrow
+                    />
+                    </div>
+                </div>
+                {(() => {
+                  const today = new Date();
+                  const firstDayOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+                    if (!dateRange.from) {
+                    const newFromDate = firstDayOfNextMonth;
+                    setDateRange((prev) => {
+                      const newToDate = new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1);
+                      return { from: newFromDate, to: newToDate };
+                    });
+                    }
+                  return null; // Ensure a valid ReactNode is returned
+                })()}
               </CardContent>
             </Card>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button disabled={!isValidDateRange} variant="default">
-                  Generate Roster
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmation</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to generate a roster for {formattedDateRange}?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <Button
-                    type="submit"
-                    onClick={async () => {
-                      if (dateRange.from && dateRange.to) {
-                        const startDate = format(dateRange.from, 'yyyy-MM-dd');
-                        const endDate = format(dateRange.to, 'yyyy-MM-dd');
+            <Button
+            type="submit"
+            onClick={async () => {
+              if (dateRange.from && dateRange.to) {
+              const startDate = format(dateRange.from, 'yyyy-MM-dd');
+              const endDate = format(dateRange.to, 'yyyy-MM-dd');
 
-                        const roster = await generateRoster({
-                          startDate: startDate,
-                          endDate: endDate,
-                        });
-                        console.log(roster);
-                        alert('Roster generated successfully!');
-                      }
-                    }}
-                  >
-                    Generate
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              const roster = await generateRoster({
+                startDate: startDate,
+                endDate: endDate,
+              });
+
+              const calendarData = [];
+              const currentDate = new Date(dateRange.from);
+
+              while (currentDate <= dateRange.to) {
+                const dayRoster = {
+                date: format(currentDate, 'yyyy-MM-dd'),
+                shifts: roster.shifts.map((shift) => ({
+                  ...shift,
+                  staff: roster.staff.filter((_, index) => index % roster.shifts.length === roster.shifts.indexOf(shift)),
+                })),
+                };
+                calendarData.push(dayRoster);
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+              setCalendarData(calendarData);
+              }
+            }}
+            >
+            Generate
+            </Button>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated Roster Table</CardTitle>
+            <CardDescription>
+              View the generated roster in a table format for each month.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mt-4">
+              <h3 className="text-lg font-bold">Shift Legend</h3>
+              <div className="flex gap-4 mt-2">
+                {Object.entries(shiftColors).map(([shiftName, color]) => (
+                  <div key={shiftName} className="flex items-center gap-2">
+                    <span className={`w-4 h-4 rounded-full ${color}`}></span>
+                    <span>{shiftName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {dateRange.from && dateRange.to ? (
+              <div className="overflow-x-auto">
+                {(() => {
+                  const months = [];
+                  let currentDate = new Date(dateRange.from);
+
+                  // Generate tables for each month in the range
+                  while (currentDate <= dateRange.to) {
+                    const start = startOfMonth(currentDate);
+                    const end = endOfMonth(currentDate);
+                    const days = eachDayOfInterval({ start, end });
+                    const firstDayOfWeek = getDay(start); // Get the starting day of the week (0 = Sunday, 6 = Saturday)
+
+                    months.push(
+                      <div key={format(start, 'yyyy-MM')}>
+                        <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
+                        <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+                          <thead>
+                            <tr>
+                              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                                <th key={day} className="border border-gray-300 p-2 bg-gray-100">
+                                  {day}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const rows = [];
+                              let cells: JSX.Element[] = [];
+
+                              // Add empty cells for days before the first day of the month
+                              for (let i = 0; i < firstDayOfWeek; i++) {
+                                cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
+                              }
+
+                              // Add cells for each day of the month
+                              days.forEach((day) => {
+                                const formattedDay = format(day, 'yyyy-MM-dd');
+                                const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
+
+                                cells.push(
+                                  <td key={formattedDay} className="border border-gray-300 p-4 align-top">
+                                    <div className="font-bold">{format(day, 'd')}</div>
+                                    {dayRoster && (
+                                      <div className="text-xs mt-2">
+                                        {dayRoster.shifts.map((shift: ShiftWithStaff, index: number) => (
+                                          <div key={index} className="flex items-center text-gray-600">
+                                            <span
+                                              className={`w-2 h-2 rounded-full ${
+                                                shiftColors[shift.name] || 'bg-gray-400'
+                                              } mr-2`}
+                                            ></span>
+                                            {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </td>
+                                );
+
+                                // If the week is complete, push the row and reset cells
+                                if (cells.length === 7) {
+                                  rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+                                  cells = [];
+                                }
+                              });
+
+                              // Add remaining cells to the last row
+                              if (cells.length > 0) {
+                                while (cells.length < 7) {
+                                  cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
+                                }
+                                rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+                              }
+
+                              return rows;
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+
+                    // Move to the next month
+                    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                  }
+
+                  return months;
+                })()}
+              </div>
+            ) : (
+              <p className="text-gray-500">No roster generated yet. Please generate a roster to view the table.</p>
+            )}
+          </CardContent>
+        </Card>
+        
+      <div className="mt-8">
+        <h3 className="text-lg font-bold">Calendar Data (JSON)</h3>
+        <pre className="bg-gray-100 p-4 rounded text-sm overflow-x-auto">
+          {JSON.stringify(calendarData, null, 2)}
+        </pre>
+      </div>
       </div>
     </div>
   );
