@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, getDay, parse } from 'date-fns';
 import { useState } from 'react';
@@ -28,7 +27,7 @@ const defaultShifts = [
   { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'] },
   { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
   { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun'], categories: ['AT', 'AT-C', 'BT'] },
-  { name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 24.5, days: ['Sat', 'Sun'], categories: ['AT', 'BT'] },
+  { name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun'], categories: ['AT', 'BT'] },
 ];
 
 const defaultFixedShifts = [
@@ -38,12 +37,19 @@ const defaultFixedShifts = [
     days: ['Mon', 'Wed', 'Thu'],
   },
 ];
-
 const defaultShiftExceptions = [
   {
     staff: 'AT-C',
     shift: 'Clinic',
     days: ['Tue', 'Fri'],
+  },
+];
+
+const defaultSpecialRules = [
+  {
+    shifts: ['Night', 'Night (Weekend)'],
+    consecutiveDays: 3,
+    gapDays: 3,
   },
 ];
 
@@ -89,6 +95,7 @@ export default function Home() {
   const [fixedShifts, setFixedShifts] = useState(defaultFixedShifts);
   const [calendarData, setCalendarData] = useState<any[]>([]);
   const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
+  const [specialRules, setSpecialRules] = useState(defaultSpecialRules);
   const shiftColors: { [key: string]: string } = {
     'Regular day': 'bg-blue-500',
     'Evening': 'bg-green-500',
@@ -210,7 +217,7 @@ export default function Home() {
   const addShiftException = () => {
     setShiftExceptions([...shiftExceptions, { staff: '', shift: '', days: [] }]);
   };
-
+  
   async function generateRoster({ startDate, endDate }: { startDate: string; endDate: string; }) {
     const roster = {
       startDate,
@@ -235,27 +242,148 @@ export default function Home() {
     const calendarData = [];
     let currentDate = new Date(startDate);
   
+    // Structure to track special rule assignments
+    // For each rule, track which staff is currently assigned, how many consecutive days completed,
+    // and which staff are in their gap period and for how many more days
+    const ruleTracking: {
+      [ruleId: string]: {
+        activeAssignment: {
+          staffName: string | null,
+          consecutiveDaysCompleted: number,
+        },
+        staffInGapPeriod: {
+          [staffName: string]: number  // Days remaining in gap period
+        }
+      }
+    } = {};
+  
+    // Initialize rule tracking
+    specialRules.forEach((_, index) => {
+      const ruleId = `rule_${index}`;
+      ruleTracking[ruleId] = {
+        activeAssignment: {
+          staffName: null,
+          consecutiveDaysCompleted: 0
+        },
+        staffInGapPeriod: {}
+      };
+    });
+  
     while (currentDate <= new Date(endDate)) {
       const dayOfWeek = format(currentDate, 'EEE');
+      const dateStr = format(currentDate, 'yyyy-MM-dd');
+      
+      // Decrement gap days for all staff in gap period
+      Object.keys(ruleTracking).forEach(ruleId => {
+        Object.keys(ruleTracking[ruleId].staffInGapPeriod).forEach(staffName => {
+          ruleTracking[ruleId].staffInGapPeriod[staffName]--;
+          if (ruleTracking[ruleId].staffInGapPeriod[staffName] <= 0) {
+            delete ruleTracking[ruleId].staffInGapPeriod[staffName];
+          }
+        });
+      });
   
       const applicableShifts = roster.shifts.filter((shift) => shift.days?.includes(dayOfWeek));
       const assignedStaff = new Set<string>();
   
       const dayRoster = {
-        date: format(currentDate, 'yyyy-MM-dd'),
+        date: dateStr,
         shifts: applicableShifts.map((shift) => {
+          // Handle fixed shifts
           const fixedShift = fixedShifts.find(
             (fs) => fs.shift === shift.name && fs.days.includes(dayOfWeek)
           );
   
           if (fixedShift) {
-            const fixedStaff = roster.staff.find((s) => s.name === fixedShift.staff);
-            if (fixedStaff) {
-              assignedStaff.add(fixedStaff.name);
-              return { ...shift, staff: [fixedStaff] };
+            const fixedStaffMember = roster.staff.find((s) => s.name === fixedShift.staff);
+            if (fixedStaffMember) {
+              assignedStaff.add(fixedStaffMember.name);
+              return { ...shift, staff: [fixedStaffMember] };
             }
           }
   
+          // Check if this shift belongs to a special rule
+          let ruleForShift: string | null = null;
+          let ruleConfig = null;
+  
+          for (let i = 0; i < specialRules.length; i++) {
+            const rule = specialRules[i];
+            const ruleId = `rule_${i}`;
+            
+            if (rule.shifts.includes(shift.name)) {
+              ruleForShift = ruleId;
+              ruleConfig = rule;
+              break;
+            }
+          }
+  
+          // If this shift belongs to a special rule
+          if (ruleForShift && ruleConfig) {
+            const tracking = ruleTracking[ruleForShift];
+            
+            // Case 1: We have an active staff assignment for this rule
+            if (tracking.activeAssignment.staffName) {
+              const activeStaff = roster.staff.find(s => s.name === tracking.activeAssignment.staffName);
+              
+              // Check if the active staff can work this shift
+              if (activeStaff && 
+                  shift.categories?.includes(activeStaff.category) && 
+                  !assignedStaff.has(activeStaff.name) &&
+                  !shiftExceptions.some(ex => 
+                    ex.staff === activeStaff.name && 
+                    ex.shift === shift.name && 
+                    ex.days.includes(dayOfWeek)
+                  )) {
+                
+                // Assign the active staff to this shift
+                assignedStaff.add(activeStaff.name);
+                tracking.activeAssignment.consecutiveDaysCompleted++;
+                
+                // Check if they've completed their consecutive days requirement
+                if (tracking.activeAssignment.consecutiveDaysCompleted >= ruleConfig.consecutiveDays) {
+                  // Start their gap period
+                  tracking.staffInGapPeriod[activeStaff.name] = ruleConfig.gapDays;
+                  // Reset active assignment
+                  tracking.activeAssignment.staffName = null;
+                  tracking.activeAssignment.consecutiveDaysCompleted = 0;
+                }
+                
+                return { ...shift, staff: [activeStaff] };
+              } else {
+                // If the active staff can't work this shift, we need to try another staff
+                // but we don't reset the active assignment
+              }
+            }
+            
+            // Case 2: We need to start a new staff assignment
+            // Find a suitable staff member who isn't in gap period and matches the category
+            const eligibleStaff = roster.staff.filter(s => 
+              shift.categories?.includes(s.category) &&
+              !assignedStaff.has(s.name) &&
+              !tracking.staffInGapPeriod[s.name] &&
+              !shiftExceptions.some(ex => 
+                ex.staff === s.name && 
+                ex.shift === shift.name && 
+                ex.days.includes(dayOfWeek)
+              )
+            );
+            
+            if (eligibleStaff.length > 0) {
+              // Choose a staff member randomly
+              const chosenStaff = eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)];
+              assignedStaff.add(chosenStaff.name);
+              
+              // Set as the active assignment for this rule
+              if (!tracking.activeAssignment.staffName) {
+                tracking.activeAssignment.staffName = chosenStaff.name;
+                tracking.activeAssignment.consecutiveDaysCompleted = 1;
+              }
+              
+              return { ...shift, staff: [chosenStaff] };
+            }
+          }
+  
+          // Regular shift assignment (not part of special rule or no eligible staff found)
           const availableStaff = roster.staff.filter(
             (s) =>
               shift.categories?.includes(s.category) &&
@@ -268,16 +396,13 @@ export default function Home() {
               )
           );
   
-          const randomStaff =
-            availableStaff.length > 0
-              ? availableStaff[Math.floor(Math.random() * availableStaff.length)]
-              : null;
-  
-          if (randomStaff) {
+          if (availableStaff.length > 0) {
+            const randomStaff = availableStaff[Math.floor(Math.random() * availableStaff.length)];
             assignedStaff.add(randomStaff.name);
+            return { ...shift, staff: [randomStaff] };
           }
   
-          return { ...shift, staff: randomStaff ? [randomStaff] : [] };
+          return { ...shift, staff: [] };
         }),
       };
   
@@ -287,7 +412,6 @@ export default function Home() {
   
     return { ...roster, calendarData };
   }
-  
 
   return (
     <div className="container flex mx-auto py-10">
@@ -296,7 +420,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle>RosterEase</CardTitle>
             <CardDescription>
-              Generate and manage your staff rosters with ease......
+              Generate and manage your staff rosters with ease.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -628,7 +752,100 @@ export default function Home() {
                 </Button>
               </CardContent>
             </Card>
-
+            <Card>
+              <CardHeader>
+              <CardTitle>Special Rule Configuration</CardTitle>
+              <CardDescription>
+                Configure special rules for shift assignments.
+              </CardDescription>
+              </CardHeader>
+              <CardContent>
+              {specialRules.map((rule, index) => (
+                <div key={index} className="mb-4 border rounded p-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                  <label className="block text-sm font-medium text-gray-700">Applicable Shifts</label>
+                  <ReactSelect
+                    isMulti
+                    options={shifts.map((shift) => ({ value: shift.name, label: shift.name }))}
+                    value={rule.shifts.map((shift) => ({ value: shift, label: shift }))}
+                    onChange={(newValue) => {
+                    const updatedRules = [...specialRules];
+                    updatedRules[index].shifts = Array.isArray(newValue) ? newValue.map((v) => v.value) : [];
+                    setSpecialRules(updatedRules);
+                    }}
+                    placeholder="Select shifts"
+                  />
+                  </div>
+                  <div>
+                  <label className="block text-sm font-medium text-gray-700">No. of Consecutive Days</label>
+                  <Select
+                    onValueChange={(value) => {
+                    const updatedRules = [...specialRules];
+                    updatedRules[index].consecutiveDays = parseInt(value, 10);
+                    setSpecialRules(updatedRules);
+                    }}
+                    defaultValue={rule.consecutiveDays.toString()}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select Consecutive Days" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
+                      <SelectItem key={value} value={value.toString()}>
+                      {value}
+                      </SelectItem>
+                    ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+                  <div>
+                  <label className="block text-sm font-medium text-gray-700">No. of Gap Days</label>
+                  <Select
+                    onValueChange={(value) => {
+                    const updatedRules = [...specialRules];
+                    updatedRules[index].gapDays = parseInt(value, 10);
+                    setSpecialRules(updatedRules);
+                    }}
+                    defaultValue={rule.gapDays.toString()}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select Gap Days" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
+                      <SelectItem key={value} value={value.toString()}>
+                      {value}
+                      </SelectItem>
+                    ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => {
+                  const updatedRules = [...specialRules];
+                  updatedRules.splice(index, 1);
+                  setSpecialRules(updatedRules);
+                }}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove
+                </Button>
+                </div>
+              ))}
+              <Button
+                variant="secondary"
+                onClick={() =>
+                setSpecialRules([
+                  ...specialRules,
+                  { shifts: [], consecutiveDays: 1, gapDays: 1 },
+                ])
+                }
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Special Rule
+              </Button>
+              </CardContent>
+            </Card>
             <Button variant="secondary" onClick={handleResetConfiguration}>
               Reset Configuration
             </Button>
@@ -815,6 +1032,123 @@ export default function Home() {
               </div>
             ) : (
               <p className="text-gray-500">No roster generated yet. Please generate a roster to view the table.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Staff Accumulated Hours</CardTitle>
+            <CardDescription>
+              View the accumulated hours assigned to each staff member for the selected date range.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {dateRange.from && dateRange.to ? (
+              <div className="overflow-x-auto">
+          <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 p-2 bg-gray-100">Date</th>
+                {staff.map((s) => (
+            <th key={s.name} className="border border-gray-300 p-2 bg-gray-100">
+              {s.name}
+            </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const rows = [];
+                let currentDate = new Date(dateRange.from);
+                const accumulatedHours: { [key: string]: number } = {};
+
+                // Initialize accumulated hours for each staff
+                staff.forEach((s) => {
+            accumulatedHours[s.name] = 0;
+                });
+
+                while (currentDate <= dateRange.to) {
+            const formattedDate = format(currentDate, 'yyyy-MM-dd');
+            const dayRoster = calendarData.find((d) => d.date === formattedDate);
+
+            const row = (
+              <tr key={formattedDate}>
+                <td className="border border-gray-300 p-2">{formattedDate}</td>
+                {staff.map((s) => {
+                  const dailyHours = dayRoster
+              ? dayRoster.shifts.reduce((total: number, shift: ShiftWithStaff) => {
+                  if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
+                    return total + shift.duration;
+                  }
+                  return total;
+                }, 0)
+              : 0;
+
+                  // Add daily hours to accumulated hours
+                  accumulatedHours[s.name] += dailyHours;
+
+                  return (
+              <td key={s.name} className="border border-gray-300 p-2 text-center">
+                {accumulatedHours[s.name]}
+              </td>
+                  );
+                })}
+              </tr>
+            );
+
+            rows.push(row);
+            currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                return rows;
+              })()}
+            </tbody>
+          </table>
+              </div>
+            ) : (
+              <p className="text-gray-500">No data available. Please generate a roster to view accumulated hours.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Shift Assignments</CardTitle>
+            <CardDescription>
+              View the special rule shift assignments in a table format.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {calendarData.length > 0 ? (
+              <div className="overflow-x-auto">
+          <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+            <thead>
+              <tr>
+          <th className="border border-gray-300 p-2 bg-gray-100">Date</th>
+          <th className="border border-gray-300 p-2 bg-gray-100">Day</th>
+          <th className="border border-gray-300 p-2 bg-gray-100">Shift Type</th>
+          <th className="border border-gray-300 p-2 bg-gray-100">Assigned Staff</th>
+              </tr>
+            </thead>
+            <tbody>
+              {calendarData.flatMap((dayRoster) =>
+          dayRoster.shifts
+            .filter((shift: ShiftWithStaff) => shift.name.includes('Night'))
+            .map((shift: ShiftWithStaff, index: number) => (
+              shift.staff.length > 0 && (
+                <tr key={`${dayRoster.date}-${index}`}>
+            <td className="border border-gray-300 p-2">{format(new Date(dayRoster.date), 'd/MM/yyyy')}</td>
+            <td className="border border-gray-300 p-2">{format(new Date(dayRoster.date), 'EEEE')}</td>
+            <td className="border border-gray-300 p-2">{shift.name}</td>
+            <td className="border border-gray-300 p-2">{shift.staff.map((s: Staff) => s.name).join(', ')}</td>
+                </tr>
+              )
+            ))
+              )}
+            </tbody>
+          </table>
+              </div>
+            ) : (
+              <p className="text-gray-500">No shift assignments available. Please generate a roster to view the data.</p>
             )}
           </CardContent>
         </Card>
