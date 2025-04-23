@@ -23,12 +23,28 @@ const defaultStaff = [
 ];
 
 const defaultShifts = [
-  { name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-  { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-  { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-  { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun'] },
-  { name: 'Night (Weekend)', startTime: '08:00', endTime: '08:30', duration: 24.5, days: ['Sat', 'Sun'] },
+  { name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
+  { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
+  { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'] },
+  { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
+  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun'], categories: ['AT', 'AT-C', 'BT'] },
+  { name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 24.5, days: ['Sat', 'Sun'], categories: ['AT', 'BT'] },
+];
+
+const defaultFixedShifts = [
+  {
+    staff: 'AT-C',
+    shift: 'Clinic',
+    days: ['Mon', 'Wed', 'Thu'],
+  },
+];
+
+const defaultShiftExceptions = [
+  {
+    staff: 'AT-C',
+    shift: 'Clinic',
+    days: ['Tue', 'Fri'],
+  },
 ];
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
@@ -70,8 +86,9 @@ export default function Home() {
   });
   const [staff, setStaff] = useState(defaultStaff);
   const [shifts, setShifts] = useState(defaultShifts);
+  const [fixedShifts, setFixedShifts] = useState(defaultFixedShifts);
   const [calendarData, setCalendarData] = useState<any[]>([]);
-
+  const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
   const shiftColors: { [key: string]: string } = {
     'Regular day': 'bg-blue-500',
     'Evening': 'bg-green-500',
@@ -132,7 +149,7 @@ export default function Home() {
   };
 
   const addShift = () => {
-    setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00', duration: 8, days: [] }]);
+    setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00', duration: 8, days: [], categories: categories }]);
   };
 
   const removeShift = (index: number) => {
@@ -162,8 +179,39 @@ export default function Home() {
     setShifts(newShifts);
   };
 
+  const updateFixedShift = (index: number, field: string, value: any) => {
+    const newFixedShifts = [...calendarData];
+    newFixedShifts[index] = { ...newFixedShifts[index], [field]: value };
+    setCalendarData(newFixedShifts);
+  };
+  
+  const removeFixedShift = (index: number) => {
+    const newFixedShifts = [...calendarData];
+    newFixedShifts.splice(index, 1);
+    setCalendarData(newFixedShifts);
+  };
+
+  const addFixedShift = () => {
+    setCalendarData([...calendarData, { staff: '', shift: '', days: [] }]);
+  };
+
+  const updateShiftException = (index: number, field: string, value: any) => {
+    const newShiftExceptions = [...shiftExceptions];
+    newShiftExceptions[index] = { ...newShiftExceptions[index], [field]: value };
+    setShiftExceptions(newShiftExceptions);
+  };
+
+  const removeShiftException = (index: number) => {
+    const newShiftExceptions = [...shiftExceptions];
+    newShiftExceptions.splice(index, 1);
+    setShiftExceptions(newShiftExceptions);
+  };
+
+  const addShiftException = () => {
+    setShiftExceptions([...shiftExceptions, { staff: '', shift: '', days: [] }]);
+  };
+
   async function generateRoster({ startDate, endDate }: { startDate: string; endDate: string; }) {
-    // Simulate roster generation logic
     const roster = {
       startDate,
       endDate,
@@ -177,61 +225,69 @@ export default function Home() {
         startTime: shift.startTime,
         endTime: shift.endTime,
         duration: shift.duration,
-        days: shift.days, // Include the days property for filtering
+        days: shift.days,
+        categories: shift.categories,
       })),
     };
-
-    // Simulate a delay to mimic an API call or heavy computation
+  
     await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Generate calendar data
+  
     const calendarData = [];
     let currentDate = new Date(startDate);
-
+  
     while (currentDate <= new Date(endDate)) {
-      const dayOfWeek = format(currentDate, 'EEE'); // Get the day of the week (e.g., 'Mon', 'Tue')
-      
-      // Filter shifts based on the day of the week
+      const dayOfWeek = format(currentDate, 'EEE');
+  
       const applicableShifts = roster.shifts.filter((shift) => shift.days?.includes(dayOfWeek));
-      console.debug(`Day of Week: ${dayOfWeek}`);
-      console.debug('Applicable Shifts:', applicableShifts);
-      const assignedStaff = new Set<string>(); // Track assigned staff to avoid duplicates
-
+      const assignedStaff = new Set<string>();
+  
       const dayRoster = {
         date: format(currentDate, 'yyyy-MM-dd'),
         shifts: applicableShifts.map((shift) => {
-          // Filter available staff who are not yet assigned for the day
-          const availableStaff = roster.staff.filter((s) => !assignedStaff.has(s.name));
-
-          // Randomly select a staff member for the shift
+          const fixedShift = fixedShifts.find(
+            (fs) => fs.shift === shift.name && fs.days.includes(dayOfWeek)
+          );
+  
+          if (fixedShift) {
+            const fixedStaff = roster.staff.find((s) => s.name === fixedShift.staff);
+            if (fixedStaff) {
+              assignedStaff.add(fixedStaff.name);
+              return { ...shift, staff: [fixedStaff] };
+            }
+          }
+  
+          const availableStaff = roster.staff.filter(
+            (s) =>
+              shift.categories?.includes(s.category) &&
+              !assignedStaff.has(s.name) &&
+              !shiftExceptions.some(
+                (exception) =>
+                  exception.staff === s.name &&
+                  exception.shift === shift.name &&
+                  exception.days.includes(dayOfWeek)
+              )
+          );
+  
           const randomStaff =
             availableStaff.length > 0
               ? availableStaff[Math.floor(Math.random() * availableStaff.length)]
               : null;
-
+  
           if (randomStaff) {
-            assignedStaff.add(randomStaff.name); // Mark the staff as assigned
+            assignedStaff.add(randomStaff.name);
           }
-
-          return {
-            ...shift,
-            staff: randomStaff ? [randomStaff] : [], // Assign the selected staff or leave empty
-          };
+  
+          return { ...shift, staff: randomStaff ? [randomStaff] : [] };
         }),
       };
-
-      // Add all applicable shifts for the day, even if no staff is assigned
-      dayRoster.shifts = applicableShifts.map((shift) => ({
-        ...shift,
-        staff: dayRoster.shifts.find((s) => s.name === shift.name)?.staff || [],
-      }));
-
+  
       calendarData.push(dayRoster);
-      currentDate.setDate(currentDate.getDate() + 1); // Move to the next day
+      currentDate.setDate(currentDate.getDate() + 1);
     }
-
+  
     return { ...roster, calendarData };
   }
+  
 
   return (
     <div className="container flex mx-auto py-10">
@@ -342,7 +398,7 @@ export default function Home() {
               <CardContent>
                 {shifts.map((shift, index) => (
                   <div key={index} className="mb-4 border rounded p-4">
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-[2fr,4fr,1fr,1fr,1fr,3fr] gap-2">
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Name</label>
                         <Input
@@ -367,7 +423,7 @@ export default function Home() {
                           onValueChange={(value) => updateShift(index, 'startTime', value)}
                           defaultValue={shift.startTime}
                         >
-                          <SelectTrigger className="w-[180px]">
+                          <SelectTrigger className="w-[100px]">
                             <SelectValue placeholder="Select Start Time" />
                           </SelectTrigger>
                           <SelectContent>
@@ -383,7 +439,7 @@ export default function Home() {
                           onValueChange={(value) => updateShift(index, 'endTime', value)}
                           defaultValue={shift.endTime}
                         >
-                          <SelectTrigger className="w-[180px]">
+                          <SelectTrigger className="w-[100px]">
                             <SelectValue placeholder="Select End Time" />
                           </SelectTrigger>
                           <SelectContent>
@@ -393,6 +449,29 @@ export default function Home() {
                           </SelectContent>
                         </Select>
                       </div>
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700">Working Hours</label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          value={shift.duration}
+                          onChange={(e) => updateShift(index, 'duration', parseFloat(e.target.value))}
+                        />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Applicable Categories</label>
+                          <ReactSelect
+                            isMulti
+                            options={categories.map((category) => ({ value: category, label: category }))}
+                            value={categories
+                              .filter((category) => shift.categories?.includes(category))
+                              .map((category) => ({ value: category, label: category }))}
+                            onChange={(newValue) =>
+                              updateShift(index, 'categories', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
+                            }
+                            placeholder="Select categories"
+                          />
+                        </div>
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => removeShift(index)}>
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -406,6 +485,150 @@ export default function Home() {
                 </Button>
               </CardContent>
             </Card>
+            <Card>
+              <CardHeader>
+              <CardTitle>Fixed Shift Configuration</CardTitle>
+              <CardDescription>Configure fixed shifts for specific staff.</CardDescription>
+              </CardHeader>
+              <CardContent>
+              {fixedShifts.map((fixedShift, index) => (
+                <div key={index} className="mb-4 border rounded p-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                  <label className="block text-sm font-medium text-gray-700">Staff</label>
+                  <Select
+                    onValueChange={(value) => updateFixedShift(index, 'staff', value)}
+                    defaultValue={fixedShift.staff}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                    <SelectValue placeholder="Select Staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {staff.map((staff) => (
+                      <SelectItem key={staff.name} value={staff.name}>
+                      {staff.name}
+                      </SelectItem>
+                    ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+                  <div>
+                  <label className="block text-sm font-medium text-gray-700">Shift</label>
+                  <Select
+                    onValueChange={(value) => updateFixedShift(index, 'shift', value)}
+                    defaultValue={fixedShift.shift}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                    <SelectValue placeholder="Select Shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {shifts.map((shift) => (
+                      <SelectItem key={shift.name} value={shift.name}>
+                      {shift.name}
+                      </SelectItem>
+                    ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+                  <div>
+                  <label className="block text-sm font-medium text-gray-700">Days</label>
+                  <ReactSelect
+                    isMulti
+                    options={daysOfWeekOptions}
+                    value={daysOfWeekOptions.filter((option) =>
+                    fixedShift.days?.includes(option.value)
+                    )}
+                    onChange={(newValue) =>
+                    updateFixedShift(index, 'days', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
+                    }
+                    placeholder="Select days"
+                  />
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => removeFixedShift(index)}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove
+                </Button>
+                </div>
+              ))}
+              <Button variant="secondary" onClick={addFixedShift}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Fixed Shift
+              </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Shift Exception Configuration</CardTitle>
+                <CardDescription>Configure staff who cannot work on specific shifts or dates.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {shiftExceptions.map((exception, index) => (
+                  <div key={index} className="mb-4 border rounded p-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Staff</label>
+                        <Select
+                          onValueChange={(value) => updateShiftException(index, 'staff', value)}
+                          defaultValue={exception.staff}
+                        >
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue placeholder="Select Staff" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {staff.map((s) => (
+                              <SelectItem key={s.name} value={s.name}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Shift</label>
+                        <Select
+                          onValueChange={(value) => updateShiftException(index, 'shift', value)}
+                          defaultValue={exception.shift}
+                        >
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue placeholder="Select Shift" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {shifts.map((shift) => (
+                              <SelectItem key={shift.name} value={shift.name}>
+                                {shift.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Days</label>
+                        <ReactSelect
+                          isMulti
+                          options={daysOfWeekOptions}
+                          value={daysOfWeekOptions.filter((option) => exception.days?.includes(option.value))}
+                          onChange={(newValue) =>
+                            updateShiftException(index, 'days', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
+                          }
+                          placeholder="Select days"
+                        />
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeShiftException(index)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="secondary" onClick={addShiftException}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Shift Exception
+                </Button>
+              </CardContent>
+            </Card>
+
             <Button variant="secondary" onClick={handleResetConfiguration}>
               Reset Configuration
             </Button>
@@ -473,21 +696,7 @@ export default function Home() {
                 endDate: endDate,
               });
 
-              const calendarData = [];
-              const currentDate = new Date(dateRange.from);
-
-              while (currentDate <= dateRange.to) {
-                const dayRoster = {
-                date: format(currentDate, 'yyyy-MM-dd'),
-                shifts: roster.shifts.map((shift) => ({
-                  ...shift,
-                  staff: roster.staff.filter((_, index) => index % roster.shifts.length === roster.shifts.indexOf(shift)),
-                })),
-                };
-                calendarData.push(dayRoster);
-                currentDate.setDate(currentDate.getDate() + 1);
-              }
-              setCalendarData(calendarData);
+              setCalendarData(roster.calendarData);
               }
             }}
             >
@@ -609,13 +818,6 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
-        
-      <div className="mt-8">
-        <h3 className="text-lg font-bold">Calendar Data (JSON)</h3>
-        <pre className="bg-gray-100 p-4 rounded text-sm overflow-x-auto">
-          {JSON.stringify(calendarData, null, 2)}
-        </pre>
-      </div>
       </div>
     </div>
   );
