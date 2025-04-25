@@ -183,3 +183,8 @@ split the into different methods
 
 11. Remove Staff based on Shift Exception: If the shift is in the Shift Exception Configuration and the current date's Day of the Week match, remove that staff from the Available Staff list
 12. Remove Staff based on Special Rule Gap Days: If it matches the shift in the Applicable Shifts of the Special Rule and the Gap Day Tracking has started (from the method 4), remove that Staff from the available Staff list and decrease the remaining Gap Day Tracking until it is 0
+
+remove the "Retrieve Public Holidays" button and automatically add the public holidays on change of the daterangeFrom and daterangeTo when both of those have a value. (as well as the default dates are being populated initially)
+
+
+extract out the Category Configuration section to a new code file just like PublicHolidayManager

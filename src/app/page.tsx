@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import ReactSelect from 'react-select';
+import { useId } from 'react';
+import PublicHolidayManager from '@/components/PublicHolidayManager';
 
 const defaultCategories = ['AT', 'AT-C', 'BT'];
 
@@ -86,9 +88,9 @@ type ShiftWithStaff = {
 
 export default function Home() {
   const [categories, setCategories] = useState(defaultCategories);
-  const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({
-    from: undefined,
-    to: undefined,
+  const [dateRange, setDateRange] = useState<{ from: Date | null, to: Date | null }>({
+    from: null,
+    to: null,
   });
   const [staff, setStaff] = useState(defaultStaff);
   const [shifts, setShifts] = useState(defaultShifts);
@@ -251,6 +253,9 @@ export default function Home() {
     });
 
     const workingHoursTracker = initializeWorkingHoursTracker();
+    
+    // Initialize shift count tracker
+    const shiftCountTracker = initializeShiftCountTracker();
 
     while (currentDate <= new Date(endDate)) {
       const dayOfWeek = format(currentDate, 'EEE');
@@ -270,7 +275,6 @@ export default function Home() {
           if (fixedShiftResult) 
           {
             const selectedStaff = fixedShiftResult.staff[0]; // Ensure selectedStaff is defined
-            updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
             return fixedShiftResult;
           }
 
@@ -279,13 +283,13 @@ export default function Home() {
             dayOfWeek,
             ruleTracking,
             roster,
-            assignedStaff
+            assignedStaff,
+            shiftCountTracker
           );
 
           if (specialRuleResult) 
           {
             const selectedStaff = specialRuleResult.staff[0]; // Ensure selectedStaff is defined
-            updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
             return specialRuleResult;
           }
 
@@ -300,6 +304,17 @@ export default function Home() {
           );
         }),
       };
+
+      // Update working hours and shift count trackers once for all assignments in this day
+      dayRoster?.shifts?.forEach(shift => {
+        if (shift.staff && shift.staff.length > 0) {
+          const selectedStaff = shift.staff[0];
+          if (selectedStaff) {
+            updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
+            updateShiftCountTracker(shiftCountTracker, selectedStaff, shift);
+          }
+        }
+      });
 
       calendarData.push(dayRoster);
       currentDate.setDate(currentDate.getDate() + 1);
@@ -364,7 +379,8 @@ export default function Home() {
     dayOfWeek: string,
     ruleTracking: any,
     roster: any,
-    assignedStaff: Set<string>
+    assignedStaff: Set<string>,
+    shiftCountTracker: any = {} // Make the parameter optional with a default value
   ) {
     let ruleId = null;
     let ruleConfig = null;
@@ -394,7 +410,6 @@ export default function Home() {
           // Continue the consecutive assignment
           assignedStaff.add(currentStaffMember.name);
           consecutiveTracking.daysRemaining--;
-          console.log(`Day: ${dayOfWeek}, Current Staff: ${currentStaffMember.name}, Days Remaining: ${consecutiveTracking.daysRemaining}`);
           // If they've completed their consecutive days, move them to gap period
           if (consecutiveTracking.daysRemaining === 0) {
             // Start gap period for this staff member
@@ -417,14 +432,28 @@ export default function Home() {
       );
       
       if (eligibleStaff.length > 0) {
-        // Select a new staff member randomly
-        const selectedStaff = eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)];
+        // Find staff with minimum number of shifts of this type
+        let minShifts = Number.MAX_SAFE_INTEGER;
+        const staffWithShiftCounts = eligibleStaff.map((s: any) => {
+          // Use shift count if available, otherwise default to 0
+          const count = (shiftCountTracker[s.name] && shiftCountTracker[s.name][shift.name]) || 0;
+          if (count < minShifts) minShifts = count;
+          return { staff: s, count };
+        });
+        
+        // Filter to only include staff with the minimum count
+        const staffWithMinShifts = staffWithShiftCounts.filter((item: { staff: any; count: number }) => item.count === minShifts);
+        
+        // Select a staff member randomly from those with minimum shifts
+        const selectedStaffObj = staffWithMinShifts[Math.floor(Math.random() * staffWithMinShifts.length)];
+        const selectedStaff = selectedStaffObj.staff;
+        
         assignedStaff.add(selectedStaff.name);
         
         // Start a new consecutive assignment
         consecutiveTracking.currentStaff = selectedStaff.name;
         consecutiveTracking.daysRemaining = ruleConfig.consecutiveDays - 1; // Already worked one day
-        console.log(`Day: ${dayOfWeek}, Current Staff: ${consecutiveTracking.currentStaff}, Days Remaining: ${consecutiveTracking.daysRemaining}`);
+        
         return { ...shift, staff: [selectedStaff] };
       }
     }
@@ -448,9 +477,6 @@ export default function Home() {
     if (sortedStaff.length > 0) {
       const selectedStaff = selectStaffWithLowestHours(sortedStaff);
       assignedStaff.add(selectedStaff.name);
-
-      updateWorkingHoursTracker(workingHoursTracker, selectedStaff, shift);
-
       startConsecutiveDayTrackingIfApplicable(
         shift,
         ruleTracking,
@@ -541,6 +567,36 @@ export default function Home() {
       }
     }
   }
+
+  function initializeShiftCountTracker() {
+    const tracker: { [staffName: string]: { [shiftName: string]: number } } = {};
+    
+    defaultStaff.forEach((staff) => {
+      tracker[staff.name] = {};
+      defaultShifts.forEach((shift) => {
+        tracker[staff.name][shift.name] = 0;
+      });
+    });
+    
+    return tracker;
+  }
+  
+  function updateShiftCountTracker(shiftCountTracker: any, staff: any, shift: any) {
+    if (staff && staff.name && shift && shift.name) {
+      if (!shiftCountTracker[staff.name]) {
+        shiftCountTracker[staff.name] = {};
+      }
+      if (!shiftCountTracker[staff.name][shift.name]) {
+        shiftCountTracker[staff.name][shift.name] = 0;
+      }
+      shiftCountTracker[staff.name][shift.name]++;
+    }
+  }
+
+  // Add this at the top of your component
+  const selectId = useId();
+  
+  // Then use it to create stable IDs for your react-select components
 
   return (
     <div className="container flex mx-auto py-10">
@@ -642,7 +698,6 @@ export default function Home() {
                 </Button>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>Shift Configuration</CardTitle>
@@ -995,8 +1050,8 @@ export default function Home() {
                       setDateRange((prev) => {
                       const newToDate = newFromDate
                       ? new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1)
-                      : undefined;
-                      return { from: newFromDate, to: newToDate };
+                      : null;
+                      return { from: newFromDate || null, to: newToDate };
                       });
                       }}
                       min={format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd')} // Disable dates earlier than tomorrow
@@ -1010,7 +1065,7 @@ export default function Home() {
                       alert('To date must be later than the From date.');
                       return;
                       }
-                      setDateRange((prev) => ({ ...prev, to: newToDate }));
+                      setDateRange((prev) => ({ ...prev, to: newToDate || null }));
                       }}
                       min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd')} // Disable dates earlier than 'from' date or tomorrow
                     />
@@ -1030,6 +1085,12 @@ export default function Home() {
                 })()}
               </CardContent>
             </Card>
+            <PublicHolidayManager
+              dateRange={dateRange}
+              calendarData={calendarData}
+              setCalendarData={setCalendarData}
+              daysOfWeekOptions={daysOfWeekOptions}
+            />
             <Button
             type="submit"
             onClick={async () => {
@@ -1247,9 +1308,9 @@ export default function Home() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Shift Assignments</CardTitle>
+            <CardTitle>Shift Assignments Summary</CardTitle>
             <CardDescription>
-              View the special rule shift assignments in a table format.
+              View the number of shifts assigned to each staff member for each shift type.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1258,27 +1319,43 @@ export default function Home() {
           <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
             <thead>
               <tr>
-          <th className="border border-gray-300 p-2 bg-gray-100">Date</th>
-          <th className="border border-gray-300 p-2 bg-gray-100">Day</th>
-          <th className="border border-gray-300 p-2 bg-gray-100">Shift Type</th>
-          <th className="border border-gray-300 p-2 bg-gray-100">Assigned Staff</th>
+                <th className="border border-gray-300 p-2 bg-gray-100">Staff</th>
+                {shifts.map((shift) => (
+            <th key={shift.name} className="border border-gray-300 p-2 bg-gray-100">
+              {shift.name}
+            </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {calendarData.flatMap((dayRoster) =>
-          dayRoster.shifts
-            .filter((shift: ShiftWithStaff) => shift.name.includes('Night'))
-            .map((shift: ShiftWithStaff, index: number) => (
-              shift.staff.length > 0 && (
-                <tr key={`${dayRoster.date}-${index}`}>
-            <td className="border border-gray-300 p-2">{format(new Date(dayRoster.date), 'd/MM/yyyy')}</td>
-            <td className="border border-gray-300 p-2">{format(new Date(dayRoster.date), 'EEEE')}</td>
-            <td className="border border-gray-300 p-2">{shift.name}</td>
-            <td className="border border-gray-300 p-2">{shift.staff.map((s: Staff) => s.name).join(', ')}</td>
-                </tr>
-              )
-            ))
-              )}
+              {staff.map((s) => {
+                const shiftCounts: { [key: string]: number } = {};
+
+                // Initialize shift counts for each shift type
+                shifts.forEach((shift) => {
+            shiftCounts[shift.name] = 0;
+                });
+
+                // Count the number of shifts assigned to the staff
+                calendarData.forEach((dayRoster) => {
+            dayRoster?.shifts?.forEach((shift: ShiftWithStaff) => {
+              if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
+                shiftCounts[shift.name]++;
+              }
+            });
+                });
+
+                return (
+            <tr key={s.name}>
+              <td className="border border-gray-300 p-2">{s.name}</td>
+              {shifts.map((shift) => (
+                <td key={shift.name} className="border border-gray-300 p-2 text-center">
+                  {shiftCounts[shift.name]}
+                </td>
+              ))}
+            </tr>
+                );
+              })}
             </tbody>
           </table>
               </div>
