@@ -92,6 +92,7 @@ type ShiftWithStaff = {
   duration: number;
   staff: Staff[];
   days?: (string | never)[]; // Explicitly define the type of 'days' as an array of strings or never
+  order: number; // Add the 'order' property to the type
 };
 
 export default function Home() {
