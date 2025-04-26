@@ -3,13 +3,16 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, getDay, parse } from 'date-fns';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Trash2 } from 'lucide-react';
-import ReactSelect from 'react-select';
 import { useId } from 'react';
 import PublicHolidayManager from '@/components/PublicHolidayManager';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the component with client-side rendering only
+const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
 
 const defaultCategories = ['AT', 'AT-C', 'BT'];
 
@@ -28,8 +31,8 @@ const defaultShifts = [
   { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
   { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'] },
   { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
-  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun'], categories: ['AT', 'AT-C', 'BT'] },
-  { name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun'], categories: ['AT', 'BT'] },
+  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'] },
+  { name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'] },
 ];
 
 const defaultFixedShifts = [
@@ -69,6 +72,7 @@ const daysOfWeekOptions = [
   { value: 'Thu', label: 'Thursday' },
   { value: 'Fri', label: 'Friday' },
   { value: 'Sat', label: 'Saturday' },
+  { value: 'PH', label: 'Public Holiday' }
 ];
 
 type Staff = {
@@ -98,6 +102,12 @@ export default function Home() {
   const [calendarData, setCalendarData] = useState<any[]>([]);
   const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
   const [specialRules, setSpecialRules] = useState(defaultSpecialRules);
+  const [publicHolidays, setPublicHolidaysState] = useState<string[]>([]);
+
+  const setPublicHolidays = useCallback((holidays: { name: string; date: string }[]) => {
+    setPublicHolidaysState(holidays.map((holiday) => holiday.date));
+  }, []);
+
   const shiftColors: { [key: string]: string } = {
     'Regular day': 'bg-blue-500',
     'Evening': 'bg-green-500',
@@ -257,6 +267,7 @@ export default function Home() {
     // Initialize shift count tracker
     const shiftCountTracker = initializeShiftCountTracker();
 
+    // Extract public holiday dates from PublicHolidayManager
     while (currentDate <= new Date(endDate)) {
       const dayOfWeek = format(currentDate, 'EEE');
       const dateStr = format(currentDate, 'yyyy-MM-dd');
@@ -264,7 +275,12 @@ export default function Home() {
       // Update gap days tracking - decrement for each staff in gap period
       updateGapDaysTracking(ruleTracking.gap);
 
-      const applicableShifts = getApplicableShiftsForDay(roster.shifts, dayOfWeek);
+      // Check if the current date is a public holiday
+      const isPublicHoliday = publicHolidays.includes(dateStr);
+      const applicableShifts = getApplicableShiftsForDay(
+        roster.shifts,
+        isPublicHoliday ? 'PH' : dayOfWeek
+      );
       const assignedStaff = new Set<string>();
 
       const dayRoster = {
@@ -599,13 +615,13 @@ export default function Home() {
   // Then use it to create stable IDs for your react-select components
 
   return (
-    <div className="container flex mx-auto py-10">
+    <div className="container flex mx-auto py-10" suppressHydrationWarning>
       <div className="flex-1 p-4">
-        <Card>
+        <Card suppressHydrationWarning>
           <CardHeader>
             <CardTitle>RosterEase</CardTitle>
             <CardDescription>
-              Generate and manage your staff rosters with ease..
+              Generate and manage your staff rosters with ease.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -667,7 +683,9 @@ export default function Home() {
                             <SelectValue placeholder="Select a category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {categories.map((category) => (
+                            {categories
+                            .filter((category) => category.trim() !== '') // Exclude empty or invalid values
+                            .map((category) => (
                               <SelectItem key={category} value={category}>{category}</SelectItem>
                             ))}
                           </SelectContent>
@@ -720,8 +738,12 @@ export default function Home() {
                         <ReactSelect
                           isMulti
                           options={daysOfWeekOptions}
-                          value={daysOfWeekOptions.filter((option) => shift.days?.includes(option.value))}
-                          onChange={(newValue) => updateShiftDays(index, Array.isArray(newValue) ? [...newValue] : [])}
+                          value={daysOfWeekOptions.filter((option) =>
+                            shift.days?.includes(option.value)
+                          )}
+                          onChange={(selectedOptions) =>
+                            updateShiftDays(index, Array.isArray(selectedOptions) ? selectedOptions : [])
+                          }
                           placeholder="Select days"
                         />
                         </div>
@@ -735,7 +757,9 @@ export default function Home() {
                             <SelectValue placeholder="Select Start Time" />
                           </SelectTrigger>
                           <SelectContent>
-                            {timeOptions.map((time) => (
+                            {timeOptions
+                            .filter((time) => time.trim() !== '') // Exclude empty or invalid values
+                            .map((time) => (
                               <SelectItem key={time} value={time}>{time}</SelectItem>
                             ))}
                           </SelectContent>
@@ -751,7 +775,9 @@ export default function Home() {
                             <SelectValue placeholder="Select End Time" />
                           </SelectTrigger>
                           <SelectContent>
-                            {timeOptions.map((time) => (
+                            {timeOptions
+                            .filter((time) => time.trim() !== '') // Exclude empty or invalid values
+                            .map((time) => (
                               <SelectItem key={time} value={time}>{time}</SelectItem>
                             ))}
                           </SelectContent>
@@ -766,20 +792,20 @@ export default function Home() {
                           onChange={(e) => updateShift(index, 'duration', parseFloat(e.target.value))}
                         />
                         </div>
-                        <div>
+                        {/* <div>
                           <label className="block text-sm font-medium text-gray-700">Applicable Categories</label>
                           <ReactSelect
-                            isMulti
-                            options={categories.map((category) => ({ value: category, label: category }))}
-                            value={categories
-                              .filter((category) => shift.categories?.includes(category))
-                              .map((category) => ({ value: category, label: category }))}
-                            onChange={(newValue) =>
-                              updateShift(index, 'categories', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
-                            }
-                            placeholder="Select categories"
+                          isMulti
+                          options={categories.map((category) => ({ value: category, label: category }))}
+                          value={categories
+                            .filter((category) => shift.categories?.includes(category))
+                            .map((category) => ({ value: category, label: category }))}
+                          onChange={(newValue) =>
+                            updateShift(index, 'categories', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
+                          }
+                          placeholder="Select categories"
                           />
-                        </div>
+                        </div> */}
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => removeShift(index)}>
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -812,7 +838,9 @@ export default function Home() {
                     <SelectValue placeholder="Select Staff" />
                     </SelectTrigger>
                     <SelectContent>
-                    {staff.map((staff) => (
+                    {staff
+                    .filter((staff) => staff.name.trim() !== '') // Exclude empty or invalid values
+                    .map((staff) => (
                       <SelectItem key={staff.name} value={staff.name}>
                       {staff.name}
                       </SelectItem>
@@ -830,7 +858,9 @@ export default function Home() {
                     <SelectValue placeholder="Select Shift" />
                     </SelectTrigger>
                     <SelectContent>
-                    {shifts.map((shift) => (
+                    {shifts
+                    .filter((shift) => shift.name.trim() !== '') // Exclude empty or invalid values
+                    .map((shift) => (
                       <SelectItem key={shift.name} value={shift.name}>
                       {shift.name}
                       </SelectItem>
@@ -885,9 +915,11 @@ export default function Home() {
                             <SelectValue placeholder="Select Staff" />
                           </SelectTrigger>
                           <SelectContent>
-                            {staff.map((s) => (
-                              <SelectItem key={s.name} value={s.name}>
-                                {s.name}
+                            {staff
+                            .filter((staff) => staff.name.trim() !== '') // Exclude empty or invalid values
+                            .map((staff) => (
+                              <SelectItem key={staff.name} value={staff.name}>
+                                {staff.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -903,7 +935,9 @@ export default function Home() {
                             <SelectValue placeholder="Select Shift" />
                           </SelectTrigger>
                           <SelectContent>
-                            {shifts.map((shift) => (
+                            {shifts
+                            .filter((shift) => shift.name.trim() !== '') // Exclude empty or invalid values
+                            .map((shift) => (
                               <SelectItem key={shift.name} value={shift.name}>
                                 {shift.name}
                               </SelectItem>
@@ -1087,9 +1121,7 @@ export default function Home() {
             </Card>
             <PublicHolidayManager
               dateRange={dateRange}
-              calendarData={calendarData}
-              setCalendarData={setCalendarData}
-              daysOfWeekOptions={daysOfWeekOptions}
+              setPublicHolidays={setPublicHolidays} // Pass the memoized function
             />
             <Button
             type="submit"
@@ -1176,7 +1208,7 @@ export default function Home() {
                                     <div className="font-bold">{format(day, 'd')}</div>
                                     {dayRoster && (
                                       <div className="text-xs mt-2">
-                                        {dayRoster.shifts.map((shift: ShiftWithStaff, index: number) => (
+                                        {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
                                           <div key={index} className="flex items-center text-gray-600">
                                             <span
                                               className={`w-2 h-2 rounded-full ${
@@ -1266,7 +1298,7 @@ export default function Home() {
                     <td className="border border-gray-300 p-2">{formattedDate}</td>
                     {staff.map((s) => {
                       const dailyHours = dayRoster
-                      ? dayRoster.shifts.reduce((total: number, shift: ShiftWithStaff) => {
+                      ? dayRoster?.shifts?.reduce((total: number, shift: ShiftWithStaff) => {
                         if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
                           return total + shift.duration;
                         }

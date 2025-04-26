@@ -17,9 +17,9 @@
             "outFiles": ["${workspaceFolder}/**/*.js"]
         },
         {
-            "type": "chrome",
+            "type": "msedge",
             "request": "launch",
-            "name": "Attach to Chrome",
+            "name": "Launch in Edge",
             "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}",
             "sourceMaps": true

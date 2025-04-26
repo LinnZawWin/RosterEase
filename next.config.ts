@@ -10,7 +10,8 @@ const nextConfig: NextConfig = {
   },
   webpack(config, { dev }) {
     if (dev) {
-      config.devtool = 'source-map';
+      // Avoid setting devtool explicitly in development
+      config.devtool = false; // Or let Next.js handle it
     }
     return config;
   },
