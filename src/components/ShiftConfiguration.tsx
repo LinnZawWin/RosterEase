@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
 
 interface Shift {
+  order: number;
   name: string;
   startTime: string;
   endTime: string;

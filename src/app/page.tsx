@@ -5,8 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, getDay, parse } from 'date-fns';
 import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PlusCircle, Trash2 } from 'lucide-react';
 import { useId } from 'react';
 import PublicHolidayConfiguration from '@/components/PublicHolidayConfiguration';
 import dynamic from 'next/dynamic';
@@ -33,12 +31,12 @@ const defaultStaff = [
 ];
 
 const defaultShifts = [
-  { name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
-  { name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
-  { name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'] },
-  { name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
-  { name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'] },
-  { name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'] },
+  { order: 1, name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
+  { order: 2, name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
+  { order: 3, name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'] },
+  { order: 4, name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
+  { order: 5, name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'] },
+  { order: 6, name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'] },
 ];
 
 const defaultFixedShifts = [
@@ -135,32 +133,6 @@ export default function Home() {
     setShifts(defaultShifts);
   };
 
-  const addCategory = () => {
-    setCategories([...categories, '']);
-  };
-
-  const removeCategory = (index: number) => {
-    const newCategories = [...categories];
-    newCategories.splice(index, 1);
-    setCategories(newCategories);
-  };
-
-  const addStaff = () => {
-    setStaff([...staff, { name: '', category: categories[0], fte: 1 }]);
-  };
-
-  const removeStaff = (index: number) => {
-    const newStaff = [...staff];
-    newStaff.splice(index, 1);
-    setStaff(newStaff);
-  };
-
-  const updateStaff = (index: number, field: string, value: any) => {
-    const newStaff = [...staff];
-    newStaff[index] = { ...newStaff[index], [field]: value };
-    setStaff(newStaff);
-  };
-
   const calculateDuration = (startTime: string, endTime: string): number => {
     const start = parse(startTime, 'HH:mm', new Date());
     const end = parse(endTime, 'HH:mm', new Date());
@@ -174,7 +146,8 @@ export default function Home() {
   };
 
   const addShift = () => {
-    setShifts([...shifts, { name: '', startTime: '08:00', endTime: '16:00', duration: 8, days: [], categories: categories }]);
+    const newOrder = shifts.length > 0 ? Math.max(...shifts.map(shift => shift.order)) + 1 : 1;
+    setShifts([...shifts, { order: newOrder, name: '', startTime: '08:00', endTime: '16:00', duration: 8, days: [], categories: categories }]);
   };
 
   const removeShift = (index: number) => {
@@ -621,16 +594,16 @@ export default function Home() {
   // Then use it to create stable IDs for your react-select components
 
   return (
-    <div className="container flex mx-auto py-10" suppressHydrationWarning>
-      <div className="flex-1 p-4">
-        <Card suppressHydrationWarning>
+    <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-6">
+        <Card>
           <CardHeader>
-            <CardTitle>RosterEase</CardTitle>
-            <CardDescription>
-              Generate and manage your staff rosters with ease.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+            <CardTitle className="text-lg sm:text-xl">RosterEase</CardTitle>
+              <CardDescription className="text-sm sm:text-base">
+                Generate and manage your staff rosters with ease.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-6">
             <CategoryConfiguration categories={categories} setCategories={setCategories} />
             <StaffConfiguration staff={staff} categories={categories} setStaff={setStaff} />
             <ShiftConfiguration
@@ -722,6 +695,7 @@ export default function Home() {
               dateRange={dateRange}
               setPublicHolidays={setPublicHolidays} // Pass the memoized function
             />
+            <div className="flex flex-col sm:flex-row gap-4">
             <Button variant="secondary" onClick={handleResetConfiguration}>
               Reset Configuration
             </Button>
@@ -743,6 +717,7 @@ export default function Home() {
             >
             Generate Roster
             </Button>
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -765,95 +740,106 @@ export default function Home() {
               </div>
             </div>
             {dateRange.from && dateRange.to ? (
-              <div className="overflow-x-auto">
+                <div className="overflow-x-auto">
                 {(() => {
                   const months = [];
                   let currentDate = new Date(dateRange.from);
 
                   // Generate tables for each month in the range
                   while (currentDate <= dateRange.to) {
-                    const start = startOfMonth(currentDate);
-                    const end = endOfMonth(currentDate);
-                    const days = eachDayOfInterval({ start, end });
-                    const firstDayOfWeek = getDay(start); // Get the starting day of the week (0 = Sunday, 6 = Saturday)
+                  const start = startOfMonth(currentDate);
+                  const end = endOfMonth(currentDate);
+                  const days = eachDayOfInterval({ start, end });
+                  const firstDayOfWeek = getDay(start); // Get the starting day of the week (0 = Sunday, 6 = Saturday)
 
-                    months.push(
-                      <div key={format(start, 'yyyy-MM')}>
-                        <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
-                        <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
-                          <thead>
-                            <tr>
-                              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                                <th key={day} className="border border-gray-300 p-2 bg-gray-100">
-                                  {day}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(() => {
-                              const rows = [];
-                              let cells: JSX.Element[] = [];
+                  months.push(
+                    <div key={format(start, 'yyyy-MM')}>
+                    <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
+                    <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+                      <thead>
+                      <tr>
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                        <th key={day} className="border border-gray-300 p-2 bg-gray-100">
+                          {day}
+                        </th>
+                        ))}
+                      </tr>
+                      </thead>
+                      <tbody>
+                      {(() => {
+                        const rows = [];
+                        let cells: JSX.Element[] = [];
 
-                              // Add empty cells for days before the first day of the month
-                              for (let i = 0; i < firstDayOfWeek; i++) {
-                                cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
-                              }
+                        // Add empty cells for days before the first day of the month
+                        for (let i = 0; i < firstDayOfWeek; i++) {
+                        cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
+                        }
 
-                              // Add cells for each day of the month
-                              days.forEach((day) => {
-                                const formattedDay = format(day, 'yyyy-MM-dd');
-                                const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
+                        // Add cells for each day of the month
+                        days.forEach((day) => {
+                        const formattedDay = format(day, 'yyyy-MM-dd');
+                        const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
+                        const isWeekend = getDay(day) === 0 || getDay(day) === 6; // Check if the day is Saturday or Sunday
+                        const isPublicHoliday = publicHolidays.includes(formattedDay); // Check if the day is a public holiday
 
-                                cells.push(
-                                  <td key={formattedDay} className="border border-gray-300 p-4 align-top">
-                                    <div className="font-bold">{format(day, 'd')}</div>
-                                    {dayRoster && (
-                                      <div className="text-xs mt-2">
-                                        {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
-                                          <div key={index} className="flex items-center text-gray-600">
-                                            <span
-                                              className={`w-2 h-2 rounded-full ${
-                                                shiftColors[shift.name] || 'bg-gray-400'
-                                              } mr-2`}
-                                            ></span>
-                                            {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </td>
-                                );
+                        cells.push(
+                          <td
+                          key={formattedDay}
+                          className={`border border-gray-300 p-4 align-top ${
+                            isWeekend
+                            ? 'bg-blue-100' // Weekend background color
+                            : isPublicHoliday
+                            ? 'bg-yellow-100' // Public holiday background color
+                            : ''
+                          }`}
+                          >
+                          <div className="font-bold">{format(day, 'd')}</div>
+                          {dayRoster && (
+                            <div className="text-xs mt-2">
+                            {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
+                              <div key={index} className="flex items-center text-gray-600">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                shiftColors[shift.name] || 'bg-gray-400'
+                                } mr-2`}
+                              ></span>
+                              {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
+                              </div>
+                            ))}
+                            </div>
+                          )}
+                          </td>
+                        );
 
-                                // If the week is complete, push the row and reset cells
-                                if (cells.length === 7) {
-                                  rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
-                                  cells = [];
-                                }
-                              });
+                        // If the week is complete, push the row and reset cells
+                        if (cells.length === 7) {
+                          rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+                          cells = [];
+                        }
+                        });
 
-                              // Add remaining cells to the last row
-                              if (cells.length > 0) {
-                                while (cells.length < 7) {
-                                  cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
-                                }
-                                rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
-                              }
+                        // Add remaining cells to the last row
+                        if (cells.length > 0) {
+                        while (cells.length < 7) {
+                          cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
+                        }
+                        rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+                        }
 
-                              return rows;
-                            })()}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
+                        return rows;
+                      })()}
+                      </tbody>
+                    </table>
+                    </div>
+                  );
 
-                    // Move to the next month
-                    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                  // Move to the next month
+                  currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
                   }
 
                   return months;
                 })()}
-              </div>
+                </div>
             ) : (
               <p className="text-gray-500">No roster generated yet. Please generate a roster to view the table.</p>
             )}
@@ -900,11 +886,13 @@ export default function Home() {
                     <td className="border border-gray-300 p-2">{formattedDate}</td>
                     {staff.map((s) => {
                       const dailyHours = dayRoster
-                      ? dayRoster?.shifts?.reduce((total: number, shift: ShiftWithStaff) => {
-                        if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
+                      ? dayRoster?.shifts
+                        ?.sort((a: ShiftWithStaff, b: ShiftWithStaff) => a.order - b.order) // Sort shifts by order
+                        ?.reduce((total: number, shift: ShiftWithStaff) => {
+                          if (shift.staff.some((staffMember) => staffMember.name === s.name)) {
                           return total + shift.duration;
-                        }
-                        return total;
+                          }
+                          return total;
                         }, 0)
                       : 0;
 
