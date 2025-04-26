@@ -18,12 +18,12 @@ interface PublicHoliday {
   date: string;
 }
 
-interface PublicHolidayManagerProps {
+interface PublicHolidayConfigurationProps {
   dateRange: DateRange;
   setPublicHolidays: (holidays: PublicHoliday[]) => void;
 }
 
-export default function PublicHolidayManager({ dateRange, setPublicHolidays }: PublicHolidayManagerProps) {
+export default function PublicHolidayConfiguration({ dateRange, setPublicHolidays }: PublicHolidayConfigurationProps) {
   const [publicHolidays, setLocalPublicHolidays] = useState<PublicHoliday[]>([]); // Local state for holidays
   const [selectedState, setSelectedState] = useState("AU-NSW");
 

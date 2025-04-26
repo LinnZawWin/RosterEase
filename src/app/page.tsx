@@ -8,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import { useId } from 'react';
-import PublicHolidayManager from '@/components/PublicHolidayManager';
+import PublicHolidayConfiguration from '@/components/PublicHolidayConfiguration';
 import dynamic from 'next/dynamic';
+import CategoryConfiguration from '@/components/StaffCategoryConfiguration';
+import StaffConfiguration from '@/components/StaffConfiguration';
+import ShiftConfiguration from '@/components/ShiftConfiguration';
+import FixedShiftConfiguration from '@/components/FixedShiftConfiguration';
+import ShiftExceptionConfiguration from '@/components/ShiftExceptionConfiguration';
+import ConsecutiveRuleConfiguration from '@/components/ConsecutiveRuleConfiguration';
 
 // Dynamically import the component with client-side rendering only
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
@@ -267,7 +273,7 @@ export default function Home() {
     // Initialize shift count tracker
     const shiftCountTracker = initializeShiftCountTracker();
 
-    // Extract public holiday dates from PublicHolidayManager
+    // Extract public holiday dates from PublicHolidayConfiguration
     while (currentDate <= new Date(endDate)) {
       const dayOfWeek = format(currentDate, 'EEE');
       const dateStr = format(currentDate, 'yyyy-MM-dd');
@@ -625,448 +631,41 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Category Configuration</CardTitle>
-                <CardDescription>Configure available categories.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {categories.map((category, index) => (
-                  <div key={index} className="mb-4 border rounded p-4">
-                    <div className="grid grid-cols-1 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Category Name</label>
-                        <Input
-                          type="text"
-                          value={category}
-                          onChange={(e) => {
-                            const newCategories = [...categories];
-                            newCategories[index] = e.target.value;
-                            setCategories(newCategories);
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeCategory(index)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-                <Button variant="secondary" onClick={addCategory}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Category
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Staff Configuration</CardTitle>
-                <CardDescription>Configure staff details.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {staff.map((s, index) => (
-                  <div key={index} className="mb-4 border rounded p-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
-                        <Input
-                          type="text"
-                          value={s.name}
-                          onChange={(e) => updateStaff(index, 'name', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Category</label>
-                        <Select onValueChange={(value) => updateStaff(index, 'category', value)} defaultValue={s.category}>
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select a category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories
-                            .filter((category) => category.trim() !== '') // Exclude empty or invalid values
-                            .map((category) => (
-                              <SelectItem key={category} value={category}>{category}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">FTE</label>
-                        <Select onValueChange={(value) => updateStaff(index, 'fte', parseFloat(value))} defaultValue={s.fte.toString()}>
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select FTE" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1">1</SelectItem>
-                            <SelectItem value="0.5">0.5</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeStaff(index)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-                <Button variant="secondary" onClick={addStaff}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Staff
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Shift Configuration</CardTitle>
-                <CardDescription>Configure shift details, including applicable days.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {shifts.map((shift, index) => (
-                  <div key={index} className="mb-4 border rounded p-4">
-                    <div className="grid grid-cols-[2fr,4fr,1fr,1fr,1fr,3fr] gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
-                        <Input
-                          type="text"
-                          value={shift.name}
-                          onChange={(e) => updateShift(index, 'name', e.target.value)}
-                        />
-                      </div>
-                        <div>
-                        <label className="block text-sm font-medium text-gray-700">Days</label>
-                        <ReactSelect
-                          isMulti
-                          options={daysOfWeekOptions}
-                          value={daysOfWeekOptions.filter((option) =>
-                            shift.days?.includes(option.value)
-                          )}
-                          onChange={(selectedOptions) =>
-                            updateShiftDays(index, Array.isArray(selectedOptions) ? selectedOptions : [])
-                          }
-                          placeholder="Select days"
-                        />
-                        </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Start Time</label>
-                        <Select
-                          onValueChange={(value) => updateShift(index, 'startTime', value)}
-                          defaultValue={shift.startTime}
-                        >
-                          <SelectTrigger className="w-[100px]">
-                            <SelectValue placeholder="Select Start Time" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {timeOptions
-                            .filter((time) => time.trim() !== '') // Exclude empty or invalid values
-                            .map((time) => (
-                              <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">End Time</label>
-                        <Select
-                          onValueChange={(value) => updateShift(index, 'endTime', value)}
-                          defaultValue={shift.endTime}
-                        >
-                          <SelectTrigger className="w-[100px]">
-                            <SelectValue placeholder="Select End Time" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {timeOptions
-                            .filter((time) => time.trim() !== '') // Exclude empty or invalid values
-                            .map((time) => (
-                              <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                        <div>
-                        <label className="block text-sm font-medium text-gray-700">Working Hours</label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          value={shift.duration}
-                          onChange={(e) => updateShift(index, 'duration', parseFloat(e.target.value))}
-                        />
-                        </div>
-                        {/* <div>
-                          <label className="block text-sm font-medium text-gray-700">Applicable Categories</label>
-                          <ReactSelect
-                          isMulti
-                          options={categories.map((category) => ({ value: category, label: category }))}
-                          value={categories
-                            .filter((category) => shift.categories?.includes(category))
-                            .map((category) => ({ value: category, label: category }))}
-                          onChange={(newValue) =>
-                            updateShift(index, 'categories', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
-                          }
-                          placeholder="Select categories"
-                          />
-                        </div> */}
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeShift(index)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-                <Button variant="secondary" onClick={addShift}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Shift
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-              <CardTitle>Fixed Shift Configuration</CardTitle>
-              <CardDescription>Configure fixed shifts for specific staff.</CardDescription>
-              </CardHeader>
-              <CardContent>
-              {fixedShifts.map((fixedShift, index) => (
-                <div key={index} className="mb-4 border rounded p-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700">Staff</label>
-                  <Select
-                    onValueChange={(value) => updateFixedShift(index, 'staff', value)}
-                    defaultValue={fixedShift.staff}
-                  >
-                    <SelectTrigger className="w-[100px]">
-                    <SelectValue placeholder="Select Staff" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    {staff
-                    .filter((staff) => staff.name.trim() !== '') // Exclude empty or invalid values
-                    .map((staff) => (
-                      <SelectItem key={staff.name} value={staff.name}>
-                      {staff.name}
-                      </SelectItem>
-                    ))}
-                    </SelectContent>
-                  </Select>
-                  </div>
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700">Shift</label>
-                  <Select
-                    onValueChange={(value) => updateFixedShift(index, 'shift', value)}
-                    defaultValue={fixedShift.shift}
-                  >
-                    <SelectTrigger className="w-[100px]">
-                    <SelectValue placeholder="Select Shift" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    {shifts
-                    .filter((shift) => shift.name.trim() !== '') // Exclude empty or invalid values
-                    .map((shift) => (
-                      <SelectItem key={shift.name} value={shift.name}>
-                      {shift.name}
-                      </SelectItem>
-                    ))}
-                    </SelectContent>
-                  </Select>
-                  </div>
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700">Days</label>
-                  <ReactSelect
-                    isMulti
-                    options={daysOfWeekOptions}
-                    value={daysOfWeekOptions.filter((option) =>
-                    fixedShift.days?.includes(option.value)
-                    )}
-                    onChange={(newValue) =>
-                    updateFixedShift(index, 'days', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
-                    }
-                    placeholder="Select days"
-                  />
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => removeFixedShift(index)}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Remove
-                </Button>
-                </div>
-              ))}
-              <Button variant="secondary" onClick={addFixedShift}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Fixed Shift
-              </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Shift Exception Configuration</CardTitle>
-                <CardDescription>Configure staff who cannot work on specific shifts or dates.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {shiftExceptions.map((exception, index) => (
-                  <div key={index} className="mb-4 border rounded p-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Staff</label>
-                        <Select
-                          onValueChange={(value) => updateShiftException(index, 'staff', value)}
-                          defaultValue={exception.staff}
-                        >
-                          <SelectTrigger className="w-[100px]">
-                            <SelectValue placeholder="Select Staff" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {staff
-                            .filter((staff) => staff.name.trim() !== '') // Exclude empty or invalid values
-                            .map((staff) => (
-                              <SelectItem key={staff.name} value={staff.name}>
-                                {staff.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Shift</label>
-                        <Select
-                          onValueChange={(value) => updateShiftException(index, 'shift', value)}
-                          defaultValue={exception.shift}
-                        >
-                          <SelectTrigger className="w-[100px]">
-                            <SelectValue placeholder="Select Shift" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {shifts
-                            .filter((shift) => shift.name.trim() !== '') // Exclude empty or invalid values
-                            .map((shift) => (
-                              <SelectItem key={shift.name} value={shift.name}>
-                                {shift.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Days</label>
-                        <ReactSelect
-                          isMulti
-                          options={daysOfWeekOptions}
-                          value={daysOfWeekOptions.filter((option) => exception.days?.includes(option.value))}
-                          onChange={(newValue) =>
-                            updateShiftException(index, 'days', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
-                          }
-                          placeholder="Select days"
-                        />
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeShiftException(index)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-                <Button variant="secondary" onClick={addShiftException}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Shift Exception
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-              <CardTitle>Special Rule Configuration</CardTitle>
-              <CardDescription>
-                Configure special rules for shift assignments.
-              </CardDescription>
-              </CardHeader>
-              <CardContent>
-              {specialRules.map((rule, index) => (
-                <div key={index} className="mb-4 border rounded p-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700">Applicable Shifts</label>
-                  <ReactSelect
-                    isMulti
-                    options={shifts.map((shift) => ({ value: shift.name, label: shift.name }))}
-                    value={rule.shifts.map((shift) => ({ value: shift, label: shift }))}
-                    onChange={(newValue) => {
-                    const updatedRules = [...specialRules];
-                    updatedRules[index].shifts = Array.isArray(newValue) ? newValue.map((v) => v.value) : [];
-                    setSpecialRules(updatedRules);
-                    }}
-                    placeholder="Select shifts"
-                  />
-                  </div>
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700">No. of Consecutive Days</label>
-                  <Select
-                    onValueChange={(value) => {
-                    const updatedRules = [...specialRules];
-                    updatedRules[index].consecutiveDays = parseInt(value, 10);
-                    setSpecialRules(updatedRules);
-                    }}
-                    defaultValue={rule.consecutiveDays.toString()}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select Consecutive Days" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
-                      <SelectItem key={value} value={value.toString()}>
-                      {value}
-                      </SelectItem>
-                    ))}
-                    </SelectContent>
-                  </Select>
-                  </div>
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700">No. of Gap Days</label>
-                  <Select
-                    onValueChange={(value) => {
-                    const updatedRules = [...specialRules];
-                    updatedRules[index].gapDays = parseInt(value, 10);
-                    setSpecialRules(updatedRules);
-                    }}
-                    defaultValue={rule.gapDays.toString()}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select Gap Days" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
-                      <SelectItem key={value} value={value.toString()}>
-                      {value}
-                      </SelectItem>
-                    ))}
-                    </SelectContent>
-                  </Select>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => {
-                  const updatedRules = [...specialRules];
-                  updatedRules.splice(index, 1);
-                  setSpecialRules(updatedRules);
-                }}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Remove
-                </Button>
-                </div>
-              ))}
-              <Button
-                variant="secondary"
-                onClick={() =>
-                setSpecialRules([
-                  ...specialRules,
-                  { shifts: [], consecutiveDays: 1, gapDays: 1 },
-                ])
-                }
-              >
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Special Rule
-              </Button>
-              </CardContent>
-            </Card>
-            <Button variant="secondary" onClick={handleResetConfiguration}>
-              Reset Configuration
-            </Button>
+            <CategoryConfiguration categories={categories} setCategories={setCategories} />
+            <StaffConfiguration staff={staff} categories={categories} setStaff={setStaff} />
+            <ShiftConfiguration
+              shifts={shifts}
+              categories={categories}
+              daysOfWeekOptions={daysOfWeekOptions}
+              timeOptions={timeOptions}
+              updateShift={updateShift}
+              updateShiftDays={updateShiftDays}
+              addShift={addShift}
+              removeShift={removeShift}
+            />
+            <FixedShiftConfiguration
+              fixedShifts={fixedShifts}
+              staff={staff}
+              shifts={shifts}
+              daysOfWeekOptions={daysOfWeekOptions}
+              updateFixedShift={updateFixedShift}
+              removeFixedShift={removeFixedShift}
+              addFixedShift={addFixedShift}
+            />
+            <ShiftExceptionConfiguration
+              shiftExceptions={shiftExceptions}
+              staff={staff}
+              shifts={shifts}
+              daysOfWeekOptions={daysOfWeekOptions}
+              updateShiftException={updateShiftException}
+              removeShiftException={removeShiftException}
+              addShiftException={addShiftException}
+            />
+            <ConsecutiveRuleConfiguration
+              specialRules={specialRules}
+              shifts={shifts}
+              setSpecialRules={setSpecialRules}
+            />
             <Card>
               <CardContent className="flex flex-col items-center gap-4">
                 <div className="flex items-center gap-4">
@@ -1119,10 +718,13 @@ export default function Home() {
                 })()}
               </CardContent>
             </Card>
-            <PublicHolidayManager
+            <PublicHolidayConfiguration
               dateRange={dateRange}
               setPublicHolidays={setPublicHolidays} // Pass the memoized function
             />
+            <Button variant="secondary" onClick={handleResetConfiguration}>
+              Reset Configuration
+            </Button>
             <Button
             type="submit"
             onClick={async () => {
@@ -1139,7 +741,7 @@ export default function Home() {
               }
             }}
             >
-            Generate
+            Generate Roster
             </Button>
           </CardContent>
         </Card>
