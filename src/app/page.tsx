@@ -263,43 +263,63 @@ export default function Home() {
       );
       const assignedStaff = new Set<string>();
 
+      const remainingShifts: any[] = []; // Initialize an array to hold remaining shifts
+
       const dayRoster = {
         date: dateStr,
         shifts: applicableShifts.map((shift) => {
           // Process fixed shifts and special rules as before
           const fixedShiftResult = processFixedShift(shift, dayOfWeek, roster, assignedStaff);
-          if (fixedShiftResult) 
-          {
-            const selectedStaff = fixedShiftResult.staff[0]; // Ensure selectedStaff is defined
-            return fixedShiftResult;
+          if (fixedShiftResult) {
+        const selectedStaff = fixedShiftResult.staff[0]; // Ensure selectedStaff is defined
+        return fixedShiftResult;
           }
 
           const specialRuleResult = processSpecialRuleConsecutiveDays(
-            shift,
-            dayOfWeek,
-            ruleTracking,
-            roster,
-            assignedStaff,
-            shiftCountTracker
+        shift,
+        dayOfWeek,
+        ruleTracking,
+        roster,
+        assignedStaff,
+        shiftCountTracker
           );
 
-          if (specialRuleResult) 
-          {
-            const selectedStaff = specialRuleResult.staff[0]; // Ensure selectedStaff is defined
-            return specialRuleResult;
+          if (specialRuleResult) {
+        const selectedStaff = specialRuleResult.staff[0]; // Ensure selectedStaff is defined
+        return specialRuleResult;
           }
 
-          return assignNormally(
-            shift,
-            dayOfWeek,
-            ruleTracking,
-            roster,
-            assignedStaff,
-            workingHoursTracker,
-            dateStr
-          );
-        }),
+          // Add the shift to remainingShifts for later processing
+          remainingShifts.push(shift);
+          return null; // Return null for now, as it will be processed later
+        }).filter(Boolean), // Filter out null values
       };
+
+      // Process remaining shifts in another loop
+      const lowestWorkingHoursStaff = sortStaffByWorkingHours(
+        roster.staff.filter((s: any) => !assignedStaff.has(s.name)),
+        workingHoursTracker,
+        dateStr
+      ).slice(0, remainingShifts.length); // Get the x number of staff with the lowest working hours
+
+      console.log(`${format(currentDate, 'yyyy-MM-dd (EEE)')} | ${sortStaffByWorkingHours(roster.staff, workingHoursTracker, dateStr).map(s => `${s.name}: ${s.hours}`).join(' | ')}`);
+
+      remainingShifts.forEach((shift) => {
+        const normalAssignment = assignNormally(
+          shift,
+          format(currentDate, 'EEE'),
+          ruleTracking,
+          roster,
+          assignedStaff,
+          workingHoursTracker,
+          format(currentDate, 'yyyy-MM-dd'),
+          lowestWorkingHoursStaff,
+          shiftCountTracker
+        );
+        if (normalAssignment.staff && normalAssignment.staff.length > 0) {
+          dayRoster.shifts.push(normalAssignment);
+        }
+      });
 
       // Update working hours and shift count trackers once for all assignments in this day
       dayRoster?.shifts?.forEach(shift => {
@@ -428,33 +448,55 @@ export default function Home() {
       );
       
       if (eligibleStaff.length > 0) {
-        // Find staff with minimum number of shifts of this type
-        let minShifts = Number.MAX_SAFE_INTEGER;
-        const staffWithShiftCounts = eligibleStaff.map((s: any) => {
-          // Use shift count if available, otherwise default to 0
-          const count = (shiftCountTracker[s.name] && shiftCountTracker[s.name][shift.name]) || 0;
-          if (count < minShifts) minShifts = count;
-          return { staff: s, count };
-        });
+        const selectedStaff = findStaffWithMinimumShifts(shift, eligibleStaff, shiftCountTracker, dayOfWeek, roster, assignedStaff, ruleTracking);
         
-        // Filter to only include staff with the minimum count
-        const staffWithMinShifts = staffWithShiftCounts.filter((item: { staff: any; count: number }) => item.count === minShifts);
-        
-        // Select a staff member randomly from those with minimum shifts
-        const selectedStaffObj = staffWithMinShifts[Math.floor(Math.random() * staffWithMinShifts.length)];
-        const selectedStaff = selectedStaffObj.staff;
-        
-        assignedStaff.add(selectedStaff.name);
-        
-        // Start a new consecutive assignment
-        consecutiveTracking.currentStaff = selectedStaff.name;
-        consecutiveTracking.daysRemaining = ruleConfig.consecutiveDays - 1; // Already worked one day
-        
-        return { ...shift, staff: [selectedStaff] };
+        if (selectedStaff) {
+          assignedStaff.add(selectedStaff.name);
+          
+          // Start a new consecutive assignment
+          consecutiveTracking.currentStaff = selectedStaff.name;
+          consecutiveTracking.daysRemaining = ruleConfig.consecutiveDays - 1; // Already worked one day
+          
+          return { ...shift, staff: [selectedStaff] };
+        }
       }
     }
     
     return null;
+  }
+
+  function findStaffWithMinimumShifts(
+    shift: any,
+    staffList: any[],
+    shiftCountTracker: any,
+    dayOfWeek: string,
+    roster: any,
+    assignedStaff: Set<string>,
+    ruleTracking: any
+  ) {
+    let minShifts = Number.MAX_SAFE_INTEGER;
+    const staffWithShiftCounts = staffList.map((s: any) => {
+      // Use shift count if available, otherwise default to 0
+      const count = (shiftCountTracker[s.name] && shiftCountTracker[s.name][shift.name]) || 0;
+      if (count < minShifts) minShifts = count;
+      return { staff: s, count };
+    });
+
+    // Filter to only include staff with the minimum count
+    const staffWithMinShifts = staffWithShiftCounts.filter((item: { staff: any; count: number }) => item.count === minShifts);
+
+    const eligibleStaff = getAvailableStaff(
+      shift,
+      dayOfWeek,
+      roster,
+      assignedStaff,
+      ruleTracking,
+      staffWithMinShifts
+    );
+
+    // Select a staff member randomly from the eligible staff with minimum shifts
+    const selectedStaffObj = eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)];
+    return selectedStaffObj || null;
   }
 
   function assignNormally(
@@ -464,8 +506,26 @@ export default function Home() {
     roster: any,
     assignedStaff: Set<string>,
     workingHoursTracker: any,
-    dateStr: string
+    dateStr: string,
+    lowestWorkingHoursStaff: any[],
+    shiftCountTracker: any = {} // Make the parameter optional with a default value
   ) {
+    if (lowestWorkingHoursStaff.length > 0) {
+      const selectedStaff = findStaffWithMinimumShifts(
+        shift,
+        lowestWorkingHoursStaff,
+        shiftCountTracker,
+        dayOfWeek,
+        roster,
+        assignedStaff,
+        ruleTracking
+      );
+      if (selectedStaff) {
+        assignedStaff.add(selectedStaff.name);
+        return { ...shift, staff: [selectedStaff] };
+      }
+    }
+
     const availableStaff = getAvailableStaff(shift, dayOfWeek, roster, assignedStaff, ruleTracking);
 
     const sortedStaff = sortStaffByWorkingHours(availableStaff, workingHoursTracker, dateStr);
@@ -473,12 +533,6 @@ export default function Home() {
     if (sortedStaff.length > 0) {
       const selectedStaff = selectStaffWithLowestHours(sortedStaff);
       assignedStaff.add(selectedStaff.name);
-      startConsecutiveDayTrackingIfApplicable(
-        shift,
-        ruleTracking,
-        selectedStaff,
-        sortedStaff.length === 1
-      );
 
       return { ...shift, staff: [selectedStaff] };
     }
@@ -491,9 +545,11 @@ export default function Home() {
     dayOfWeek: string,
     roster: any,
     assignedStaff: Set<string>,
-    ruleTracking: any
+    ruleTracking: any,
+    selectedStaffs: any[] = []
   ) {
-    return roster.staff.filter(
+    const staffPool = selectedStaffs.length > 0 ? selectedStaffs : roster.staff; // Use selectedStaffs if not empty
+    return staffPool.filter(
       (s: any) =>
         shift.categories?.includes(s.category) &&
         !assignedStaff.has(s.name) &&
@@ -545,6 +601,7 @@ export default function Home() {
     workingHoursTracker[staff.name] += hours;
   }
 
+  /*
   function startConsecutiveDayTrackingIfApplicable(
     shift: any,
     ruleTracking: any,
@@ -563,6 +620,7 @@ export default function Home() {
       }
     }
   }
+  */
 
   function initializeShiftCountTracker() {
     const tracker: { [staffName: string]: { [shiftName: string]: number } } = {};
