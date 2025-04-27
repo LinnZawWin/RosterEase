@@ -97,21 +97,105 @@ type ShiftWithStaff = {
 
 export default function Home() {
   const [categories, setCategories] = useState(defaultCategories);
-  const [dateRange, setDateRange] = useState<{ from: Date | null, to: Date | null }>({
+  const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
     to: null,
   });
   const [staff, setStaff] = useState(defaultStaff);
   const [shifts, setShifts] = useState(defaultShifts);
-  const [fixedShifts, setFixedShifts] = useState(defaultFixedShifts);
   const [calendarData, setCalendarData] = useState<any[]>([]);
+  const [fixedShifts, setFixedShifts] = useState(defaultFixedShifts);
   const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
-  const [specialRules, setSpecialRules] = useState(defaultSpecialRules);
   const [publicHolidays, setPublicHolidaysState] = useState<string[]>([]);
+  const [specialRules, setSpecialRules] = useState(defaultSpecialRules);
 
   const setPublicHolidays = useCallback((holidays: { name: string; date: string }[]) => {
     setPublicHolidaysState(holidays.map((holiday) => holiday.date));
   }, []);
+
+  const handleGenerateRoster = async () => {
+    if (dateRange.from && dateRange.to) {
+      const startDate = format(dateRange.from, 'yyyy-MM-dd');
+      const endDate = format(dateRange.to, 'yyyy-MM-dd');
+
+      const roster = await generateRoster({
+        startDate: startDate,
+        endDate: endDate,
+      });
+
+      setCalendarData(roster.calendarData);
+    } else {
+      alert('Please select a valid date range.');
+    }
+  };
+
+  const handleExportCalendar = () => {
+    if (calendarData.length > 0) {
+      const csvRows: string[][] = [];
+      let currentMonth = '';
+      calendarData.forEach((dayRoster, index) => {
+        const date = new Date(dayRoster.date);
+        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+        const monthYear = format(date, 'MMMM yyyy');
+
+        // Add month header if it changes
+        if (currentMonth !== monthYear) {
+          if (csvRows.length > 0) {
+        csvRows.push(['']); // Add an empty row to separate months
+          }
+          currentMonth = monthYear;
+          csvRows.push([currentMonth]); // Add the month header
+          csvRows.push(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']); // Add the day headers
+          csvRows.push([]); // Start a new week row
+        }
+
+        // Fill empty cells for the start of the week if it's the first day of the month
+        if (csvRows[csvRows.length - 1].length === 0) {
+          for (let i = 0; i < dayOfWeek; i++) {
+        csvRows[csvRows.length - 1].push('');
+          }
+        }
+
+        const shiftsForDay =
+          dayRoster?.shifts
+        ?.map((shift: ShiftWithStaff) => `${shift.name} (${shift.staff.map((s) => s.name).join(', ')})`)
+        ?.join('\n') || '';
+
+        // Add the current day and its shifts
+        if (!csvRows[csvRows.length - 1] || csvRows[csvRows.length - 1].length === 7) {
+          csvRows.push([]); // Start a new week
+        }
+        csvRows[csvRows.length - 1].push(`${format(date, '"d')}\n${shiftsForDay}"`);
+
+        // Handle the last week of the month
+        if (index === calendarData.length - 1 && csvRows[csvRows.length - 1].length < 7) {
+          while (csvRows[csvRows.length - 1].length < 7) {
+        csvRows[csvRows.length - 1].push('');
+          }
+        }
+      });
+
+      const csvContent = `data:text/csv;charset=utf-8,${csvRows.map((row) => row.join(',')).join('\n')}`;
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      const fromDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : 'unknown';
+      const toDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : 'unknown';
+      const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
+      link.setAttribute('download', `Roster_Data_${fromDate}_to_${toDate}_${timestamp}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert('No calendar data available to export. Please generate a roster first.');
+    }
+  };
+
+  const handleResetConfiguration = () => {
+    setCategories(defaultCategories);
+    setStaff(defaultStaff);
+    setShifts(defaultShifts);
+  };
 
   const shiftColors: { [key: string]: string } = {
     'Regular day': 'bg-blue-500',
@@ -127,12 +211,6 @@ export default function Home() {
     : 'Select Date Range';
 
   const isValidDateRange = dateRange.from && dateRange.to && dateRange.to > dateRange.from;
-
-  const handleResetConfiguration = () => {
-    setCategories(defaultCategories);
-    setStaff(defaultStaff);
-    setShifts(defaultShifts);
-  };
 
   const calculateDuration = (startTime: string, endTime: string): number => {
     const start = parse(startTime, 'HH:mm', new Date());
@@ -754,28 +832,18 @@ export default function Home() {
               dateRange={dateRange}
               setPublicHolidays={setPublicHolidays} // Pass the memoized function
             />
-            <div className="flex flex-col sm:flex-row gap-4">
-            <Button variant="secondary" onClick={handleResetConfiguration}>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <div className="flex gap-4">
+              <Button variant="secondary" onClick={() => alert('Import Configuration')}>
+                Import Configuration
+              </Button>
+              <Button variant="secondary" onClick={() => alert('Export Configuration')}>
+                Export Configuration
+              </Button>
+              </div>
+              <Button variant="secondary" onClick={handleResetConfiguration}>
               Reset Configuration
-            </Button>
-            <Button
-            type="submit"
-            onClick={async () => {
-              if (dateRange.from && dateRange.to) {
-              const startDate = format(dateRange.from, 'yyyy-MM-dd');
-              const endDate = format(dateRange.to, 'yyyy-MM-dd');
-
-              const roster = await generateRoster({
-                startDate: startDate,
-                endDate: endDate,
-              });
-
-              setCalendarData(roster.calendarData);
-              }
-            }}
-            >
-            Generate Roster
-            </Button>
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -787,6 +855,14 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="flex justify-center">
+              <Button
+              type="submit"
+              onClick={handleGenerateRoster}
+              >
+              Generate Roster
+              </Button>
+            </div>
             <div className="mt-4">
               <h3 className="text-lg font-bold">Shift Legend</h3>
               <div className="flex gap-4 mt-2">
@@ -902,6 +978,13 @@ export default function Home() {
             ) : (
               <p className="text-gray-500">No roster generated yet. Please generate a roster to view the table.</p>
             )}
+            <div className="mt-6 flex justify-center">
+                <Button
+                onClick={handleExportCalendar}
+                >
+                Export Calendar
+                </Button>
+            </div>
           </CardContent>
         </Card>
         <Card>
