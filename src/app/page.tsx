@@ -14,6 +14,7 @@ import ShiftConfiguration from '@/components/ShiftConfiguration';
 import FixedShiftConfiguration from '@/components/FixedShiftConfiguration';
 import ShiftExceptionConfiguration from '@/components/ShiftExceptionConfiguration';
 import ConsecutiveRuleConfiguration from '@/components/ConsecutiveRuleConfiguration';
+import * as XLSX from 'xlsx';
 
 // Dynamically import the component with client-side rendering only
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
@@ -130,65 +131,104 @@ export default function Home() {
   };
 
   const handleExportCalendar = () => {
-    if (calendarData.length > 0) {
-      const csvRows: string[][] = [];
-      let currentMonth = '';
-      calendarData.forEach((dayRoster, index) => {
-        const date = new Date(dayRoster.date);
-        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-        const monthYear = format(date, 'MMMM yyyy');
+    if (calendarData.length === 0) {
+      alert('No calendar data available to export. Please generate a roster first.');
+      return;
+    }
 
-        // Add month header if it changes
-        if (currentMonth !== monthYear) {
-          if (csvRows.length > 0) {
-        csvRows.push(['']); // Add an empty row to separate months
+    // Prepare data for Excel (similar to your CSV logic)
+    const weeks: { [key: string]: any[] } = {};
+    calendarData.forEach((dayRoster) => {
+      const date = new Date(dayRoster.date);
+      const monday = new Date(date);
+      const day = monday.getDay();
+      monday.setDate(monday.getDate() - ((day + 6) % 7));
+      const weekKey = format(monday, 'yyyy-MM-dd');
+      if (!weeks[weekKey]) weeks[weekKey] = [];
+      weeks[weekKey].push(dayRoster);
+    });
+
+    const sortedWeekKeys = Object.keys(weeks).sort();
+    const excelRows: any[][] = [];
+
+    sortedWeekKeys.forEach((weekKey) => {
+      const weekDays = weeks[weekKey]
+        .map((d) => new Date(d.date))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      const weekDates: (Date | null)[] = [];
+      const monday = new Date(weekKey);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const found = weekDays.find((wd) => format(wd, 'yyyy-MM-dd') === format(d, 'yyyy-MM-dd'));
+        weekDates.push(found ? d : null);
+      }
+
+      const monthYear = weekDates[0] ? format(weekDates[0], 'MMM-yy') : '';
+      excelRows.push([
+        monthYear,
+        'Mon',
+        'Tue',
+        'Wed',
+        'Thu',
+        'Fri',
+        'Sat',
+        'Sun',
+      ]);
+      excelRows.push([
+        '',
+        ...weekDates.map((d) => (d ? format(d, 'd') : ''))
+      ]);
+
+      staff.forEach((s) => {
+        const row: string[] = [];
+        row.push(s.name);
+        for (let i = 0; i < 7; i++) {
+          const d = weekDates[i];
+          if (!d) {
+            row.push('');
+            continue;
           }
-          currentMonth = monthYear;
-          csvRows.push([currentMonth]); // Add the month header
-          csvRows.push(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']); // Add the day headers
-          csvRows.push([]); // Start a new week row
-        }
-
-        // Fill empty cells for the start of the week if it's the first day of the month
-        if (csvRows[csvRows.length - 1].length === 0) {
-          for (let i = 0; i < dayOfWeek; i++) {
-        csvRows[csvRows.length - 1].push('');
+          const dayRoster = calendarData.find(
+            (r) => r.date === format(d, 'yyyy-MM-dd')
+          );
+          if (!dayRoster) {
+            row.push('');
+            continue;
+          }
+          const shiftsForStaff = (dayRoster.shifts || []).filter((shift: ShiftWithStaff) =>
+            shift.staff.some((st: Staff) => st.name === s.name)
+          );
+          if (shiftsForStaff.length === 0) {
+            row.push('');
+          } else {
+            row.push(
+              shiftsForStaff
+                .map(
+                  (shift: ShiftWithStaff) =>
+                    `${shift.duration} ${shift.name}`
+                )
+                .join('\n')
+            );
           }
         }
-
-        const shiftsForDay =
-          dayRoster?.shifts
-        ?.map((shift: ShiftWithStaff) => `${shift.name} (${shift.staff.map((s) => s.name).join(', ')})`)
-        ?.join('\n') || '';
-
-        // Add the current day and its shifts
-        if (!csvRows[csvRows.length - 1] || csvRows[csvRows.length - 1].length === 7) {
-          csvRows.push([]); // Start a new week
-        }
-        csvRows[csvRows.length - 1].push(`${format(date, '"d')}\n${shiftsForDay}"`);
-
-        // Handle the last week of the month
-        if (index === calendarData.length - 1 && csvRows[csvRows.length - 1].length < 7) {
-          while (csvRows[csvRows.length - 1].length < 7) {
-        csvRows[csvRows.length - 1].push('');
-          }
-        }
+        excelRows.push(row);
       });
 
-      const csvContent = `data:text/csv;charset=utf-8,${csvRows.map((row) => row.join(',')).join('\n')}`;
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      const fromDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : 'unknown';
-      const toDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : 'unknown';
-      const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
-      link.setAttribute('download', `Roster_Data_${fromDate}_to_${toDate}_${timestamp}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      alert('No calendar data available to export. Please generate a roster first.');
-    }
+      excelRows.push(['']);
+    });
+
+    // Create worksheet and workbook
+    const ws = XLSX.utils.aoa_to_sheet(excelRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Roster');
+
+    // Download Excel file
+    const fromDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : 'unknown';
+    const toDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : 'unknown';
+    const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
+    XLSX.writeFile(wb, `Roster_Weekly_${fromDate}_to_${toDate}_${timestamp}.xlsx`);
   };
 
   const handleResetConfiguration = () => {
@@ -875,106 +915,111 @@ export default function Home() {
               </div>
             </div>
             {dateRange.from && dateRange.to ? (
-                <div className="overflow-x-auto">
-                {(() => {
-                  const months = [];
-                  let currentDate = new Date(dateRange.from);
+              <div className="overflow-x-auto">
+              {(() => {
+                const months = [];
+                let currentDate = new Date(dateRange.from);
 
-                  // Generate tables for each month in the range
-                  while (currentDate <= dateRange.to) {
-                  const start = startOfMonth(currentDate);
-                  const end = endOfMonth(currentDate);
-                  const days = eachDayOfInterval({ start, end });
-                  const firstDayOfWeek = getDay(start); // Get the starting day of the week (0 = Sunday, 6 = Saturday)
+                // Generate tables for each month in the range
+                while (currentDate <= dateRange.to) {
+                const start = startOfMonth(currentDate);
+                const end = endOfMonth(currentDate);
+                const days = eachDayOfInterval({ start, end });
+                // Get the starting day of the week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+                // We want weeks to start on Monday, so adjust accordingly
+                const firstDayOfWeek = (getDay(start) + 6) % 7; // 0=Mon, 6=Sun
 
-                  months.push(
-                    <div key={format(start, 'yyyy-MM')}>
-                    <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
-                    <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
-                      <thead>
-                      <tr>
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                        <th key={day} className="border border-gray-300 p-2 bg-gray-100">
-                          {day}
-                        </th>
-                        ))}
-                      </tr>
-                      </thead>
-                      <tbody>
-                      {(() => {
-                        const rows = [];
-                        let cells: JSX.Element[] = [];
+                months.push(
+                <div key={format(start, 'yyyy-MM')}>
+                <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
+                <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+                  <thead>
+                  <tr>
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                  <th key={day} className="border border-gray-300 p-2 bg-gray-100">
+                    {day}
+                  </th>
+                  ))}
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {(() => {
+                  const rows = [];
+                  let cells: JSX.Element[] = [];
 
-                        // Add empty cells for days before the first day of the month
-                        for (let i = 0; i < firstDayOfWeek; i++) {
-                        cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
-                        }
-
-                        // Add cells for each day of the month
-                        days.forEach((day) => {
-                        const formattedDay = format(day, 'yyyy-MM-dd');
-                        const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
-                        const isWeekend = getDay(day) === 0 || getDay(day) === 6; // Check if the day is Saturday or Sunday
-                        const isPublicHoliday = publicHolidays.includes(formattedDay); // Check if the day is a public holiday
-
-                        cells.push(
-                          <td
-                          key={formattedDay}
-                          className={`border border-gray-300 p-4 align-top ${
-                            isWeekend
-                            ? 'bg-blue-100' // Weekend background color
-                            : isPublicHoliday
-                            ? 'bg-yellow-100' // Public holiday background color
-                            : ''
-                          }`}
-                          >
-                          <div className="font-bold">{format(day, 'd')}</div>
-                          {dayRoster && (
-                            <div className="text-xs mt-2">
-                            {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
-                              <div key={index} className="flex items-center text-gray-600">
-                              <span
-                                className={`w-2 h-2 rounded-full ${
-                                shiftColors[shift.name] || 'bg-gray-400'
-                                } mr-2`}
-                              ></span>
-                              {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
-                              </div>
-                            ))}
-                            </div>
-                          )}
-                          </td>
-                        );
-
-                        // If the week is complete, push the row and reset cells
-                        if (cells.length === 7) {
-                          rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
-                          cells = [];
-                        }
-                        });
-
-                        // Add remaining cells to the last row
-                        if (cells.length > 0) {
-                        while (cells.length < 7) {
-                          cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
-                        }
-                        rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
-                        }
-
-                        return rows;
-                      })()}
-                      </tbody>
-                    </table>
-                    </div>
-                  );
-
-                  // Move to the next month
-                  currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                  // Add empty cells for days before the first day of the month (Monday as first day)
+                  for (let i = 0; i < firstDayOfWeek; i++) {
+                  cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
                   }
 
-                  return months;
-                })()}
+                  // Add cells for each day of the month
+                  days.forEach((day) => {
+                  const formattedDay = format(day, 'yyyy-MM-dd');
+                  const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
+                  // Adjust getDay: 0=Sunday, 1=Monday, ..., 6=Saturday
+                  // For Mon-Sun: 0=Mon, ..., 6=Sun
+                  const adjustedDay = (getDay(day) + 6) % 7;
+                  const isWeekend = adjustedDay === 5 || adjustedDay === 6; // Sat or Sun
+                  const isPublicHoliday = publicHolidays.includes(formattedDay);
+
+                  cells.push(
+                    <td
+                    key={formattedDay}
+                    className={`border border-gray-300 p-4 align-top ${
+                    isWeekend
+                    ? 'bg-blue-100'
+                    : isPublicHoliday
+                    ? 'bg-yellow-100'
+                    : ''
+                    }`}
+                    >
+                    <div className="font-bold">{format(day, 'd')}</div>
+                    {dayRoster && (
+                    <div className="text-xs mt-2">
+                    {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
+                      <div key={index} className="flex items-center text-gray-600">
+                      <span
+                      className={`w-2 h-2 rounded-full ${
+                      shiftColors[shift.name] || 'bg-gray-400'
+                      } mr-2`}
+                      ></span>
+                      {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
+                      </div>
+                    ))}
+                    </div>
+                    )}
+                    </td>
+                  );
+
+                  // If the week is complete, push the row and reset cells
+                  if (cells.length === 7) {
+                    rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+                    cells = [];
+                  }
+                  });
+
+                  // Add remaining cells to the last row
+                  if (cells.length > 0) {
+                  while (cells.length < 7) {
+                    cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
+                  }
+                  rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+                  }
+
+                  return rows;
+                  })()}
+                  </tbody>
+                </table>
                 </div>
+                );
+
+                // Move to the next month
+                currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                }
+
+                return months;
+              })()}
+              </div>
             ) : (
               <p className="text-gray-500">No roster generated yet. Please generate a roster to view the table.</p>
             )}
