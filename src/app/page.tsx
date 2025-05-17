@@ -14,6 +14,7 @@ import FixedShiftConfiguration from '@/components/FixedShiftConfiguration';
 import ShiftExceptionConfiguration from '@/components/ShiftExceptionConfiguration';
 import ConsecutiveRuleConfiguration from '@/components/ConsecutiveRuleConfiguration';
 import * as XLSXStyle from 'xlsx-js-style';
+import LeaveConfiguration from '@/components/LeaveConfiguration';
 
 const defaultCategories = ['AT', 'AT-C', 'BT'];
 
@@ -34,6 +35,7 @@ const defaultShifts = [
   { order: 4, name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
   { order: 5, name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'], color: '#DDEBF7' },
   { order: 6, name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'], color: '#FCE4D6' },
+  { order: 7, name: 'Annual Leave', startTime: '00:00', endTime: '23:30', duration: 8, days: [], categories: ['AT', 'AT-C', 'BT'], color: '#B34CAF' },
 ];
 
 const defaultFixedShifts = [
@@ -105,6 +107,13 @@ export default function Home() {
   const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
   const [publicHolidays, setPublicHolidaysState] = useState<string[]>([]);
   const [specialRules, setSpecialRules] = useState(defaultSpecialRules);
+  const [leaves, setLeaves] = useState([
+    {
+      staff: 'AT-3',
+      from: new Date('2025-05-19'),
+      to: new Date('2025-05-30'),
+    },
+  ]);
 
   const setPublicHolidays = useCallback((holidays: { name: string; date: string }[]) => {
     setPublicHolidaysState(holidays.map((holiday) => holiday.date));
@@ -963,6 +972,16 @@ export default function Home() {
               specialRules={specialRules}
               shifts={shifts}
               setSpecialRules={setSpecialRules}
+            />
+            <PublicHolidayConfiguration
+              dateRange={dateRange}
+              setPublicHolidays={setPublicHolidays}
+            />
+            {/* Leave Configuration Control */}
+            <LeaveConfiguration
+              staff={staff}
+              leaves={leaves}
+              setLeaves={setLeaves}
             />
             <Card>
               <CardContent className="flex flex-col items-center gap-4">
