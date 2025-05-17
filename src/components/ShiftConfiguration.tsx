@@ -17,6 +17,7 @@ interface Shift {
   duration: number;
   days: string[];
   categories: string[];
+  color?: string;
 }
 
 interface ShiftConfigurationProps {
@@ -49,71 +50,82 @@ export default function ShiftConfiguration({
       <CardContent>
         {shifts.map((shift, index) => (
           <div key={index} className="mb-4 border rounded p-4">
-            <div className="grid grid-cols-[2fr,4fr,1fr,1fr,1fr,3fr] gap-2">
+            <div className="grid grid-cols-[2fr,7fr,1fr,1fr,1fr,1fr] gap-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                <Input
-                  type="text"
-                  value={shift.name}
-                  onChange={(e) => updateShift(index, 'name', e.target.value)}
-                />
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <Input
+                type="text"
+                value={shift.name}
+                onChange={(e) => updateShift(index, 'name', e.target.value)}
+              />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Days</label>
-                <ReactSelect
-                  isMulti
-                  options={daysOfWeekOptions}
-                  value={daysOfWeekOptions.filter((option) => shift.days?.includes(option.value))}
-                  onChange={(selectedOptions) =>
-                    updateShiftDays(index, Array.isArray(selectedOptions) ? selectedOptions : [])
-                  }
-                  placeholder="Select days"
-                />
+              <label className="block text-sm font-medium text-gray-700">Days</label>
+              <ReactSelect
+                isMulti
+                options={daysOfWeekOptions}
+                value={daysOfWeekOptions.filter((option) => shift.days?.includes(option.value))}
+                onChange={(selectedOptions) =>
+                updateShiftDays(index, Array.isArray(selectedOptions) ? selectedOptions : [])
+                }
+                placeholder="Select days"
+              />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Start Time</label>
-                <Select
-                  onValueChange={(value) => updateShift(index, 'startTime', value)}
-                  defaultValue={shift.startTime}
-                >
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue placeholder="Select Start Time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <label className="block text-sm font-medium text-gray-700">Start Time</label>
+              <Select
+                onValueChange={(value) => updateShift(index, 'startTime', value)}
+                defaultValue={shift.startTime}
+              >
+                <SelectTrigger className="w-[100px]">
+                <SelectValue placeholder="Select Start Time" />
+                </SelectTrigger>
+                <SelectContent>
+                {timeOptions.map((time) => (
+                  <SelectItem key={time} value={time}>
+                  {time}
+                  </SelectItem>
+                ))}
+                </SelectContent>
+              </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">End Time</label>
-                <Select
-                  onValueChange={(value) => updateShift(index, 'endTime', value)}
-                  defaultValue={shift.endTime}
-                >
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue placeholder="Select End Time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <label className="block text-sm font-medium text-gray-700">End Time</label>
+              <Select
+                onValueChange={(value) => updateShift(index, 'endTime', value)}
+                defaultValue={shift.endTime}
+              >
+                <SelectTrigger className="w-[100px]">
+                <SelectValue placeholder="Select End Time" />
+                </SelectTrigger>
+                <SelectContent>
+                {timeOptions.map((time) => (
+                  <SelectItem key={time} value={time}>
+                  {time}
+                  </SelectItem>
+                ))}
+                </SelectContent>
+              </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Working Hours</label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  value={shift.duration}
-                  onChange={(e) => updateShift(index, 'duration', parseFloat(e.target.value))}
-                />
+              <label className="block text-sm font-medium text-gray-700">Working Hours</label>
+              <Input
+                type="number"
+                step="0.5"
+                value={shift.duration}
+                onChange={(e) => updateShift(index, 'duration', parseFloat(e.target.value))}
+              />
+              </div>
+              <div>
+              <label className="block text-sm font-medium text-gray-700">Colour</label>
+              <Input
+                type="color"
+                value={shift.color || '#FFFFFF'}
+                onChange={(e) => updateShift(index, 'color', e.target.value)}
+                className="h-10 w-12 p-0 border-none bg-transparent"
+                style={{ minWidth: 48 }}
+                aria-label="Shift Colour"
+              />
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => removeShift(index)}>

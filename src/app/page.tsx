@@ -7,17 +7,13 @@ import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { useId } from 'react';
 import PublicHolidayConfiguration from '@/components/PublicHolidayConfiguration';
-import dynamic from 'next/dynamic';
 import CategoryConfiguration from '@/components/StaffCategoryConfiguration';
 import StaffConfiguration from '@/components/StaffConfiguration';
 import ShiftConfiguration from '@/components/ShiftConfiguration';
 import FixedShiftConfiguration from '@/components/FixedShiftConfiguration';
 import ShiftExceptionConfiguration from '@/components/ShiftExceptionConfiguration';
 import ConsecutiveRuleConfiguration from '@/components/ConsecutiveRuleConfiguration';
-import * as XLSX from 'xlsx';
-
-// Dynamically import the component with client-side rendering only
-const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
+import * as XLSXStyle from 'xlsx-js-style';
 
 const defaultCategories = ['AT', 'AT-C', 'BT'];
 
@@ -32,12 +28,12 @@ const defaultStaff = [
 ];
 
 const defaultShifts = [
-  { order: 1, name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
-  { order: 2, name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'] },
-  { order: 3, name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'] },
+  { order: 1, name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'], color: '#DDEBF7' },
+  { order: 2, name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'], color: '#C6E0B4' },
+  { order: 3, name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'BT'], color: '#FCE4D6' },
   { order: 4, name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
-  { order: 5, name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'] },
-  { order: 6, name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'] },
+  { order: 5, name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'], color: '#DDEBF7' },
+  { order: 6, name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'], color: '#FCE4D6' },
 ];
 
 const defaultFixedShifts = [
@@ -130,6 +126,14 @@ export default function Home() {
     }
   };
 
+  // Helper to get ordinal suffix for a date
+  function getOrdinal(n: number) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  // Use xlsx-js-style for styled Excel export
   const handleExportCalendar = () => {
     if (calendarData.length === 0) {
       alert('No calendar data available to export. Please generate a roster first.');
@@ -150,8 +154,14 @@ export default function Home() {
 
     const sortedWeekKeys = Object.keys(weeks).sort();
     const excelRows: any[][] = [];
+    const cellStyles: { [cell: string]: any } = {};
+    const cellTypes: { [cell: string]: any } = {};
 
-    sortedWeekKeys.forEach((weekKey) => {
+    // Track the start and end row for each week block
+    let currentRow = 0;
+    const weekBlocks: { start: number; end: number }[] = [];
+
+    sortedWeekKeys.forEach((weekKey, weekIdx) => {
       const weekDays = weeks[weekKey]
         .map((d) => new Date(d.date))
         .sort((a, b) => a.getTime() - b.getTime());
@@ -165,8 +175,23 @@ export default function Home() {
         weekDates.push(found ? d : null);
       }
 
-      const monthYear = weekDates[0] ? format(weekDates[0], 'MMM-yy') : '';
-      excelRows.push([
+      // For the very first block, set the previous month if the 1st is not Monday
+      let monthYear = weekDates[0] ? format(weekDates[0], 'MMM-yy') : '';
+      if (weekIdx === 0 && weekDates.some(d => d && d.getDate() === 1 && d.getDay() !== 1)) {
+        // Find the first date in the week that is the 1st
+        const firstOfMonth = weekDates.find(d => d && d.getDate() === 1);
+        if (firstOfMonth) {
+          const prevMonth = new Date(firstOfMonth);
+          prevMonth.setMonth(prevMonth.getMonth() - 1);
+          monthYear = format(prevMonth, 'MMM-yy');
+        }
+      }
+
+      // Track start row for this week block (1-based for Excel)
+      const blockStartRow = currentRow + 1;
+
+      // Add header row with bold and center alignment
+      const headerRow = [
         monthYear,
         'Mon',
         'Tue',
@@ -175,14 +200,58 @@ export default function Home() {
         'Fri',
         'Sat',
         'Sun',
-      ]);
+      ];
+      excelRows.push(headerRow);
+      currentRow++;
+
+      // Apply bold and center alignment to header row cells
+      headerRow.forEach((_, i) => {
+        const colLetter = String.fromCharCode('A'.charCodeAt(0) + i);
+        const rowNum = currentRow; // 1-based index
+        cellStyles[`${colLetter}${rowNum}`] = {
+          font: { bold: true },
+          alignment: { horizontal: "center", vertical: "center" }
+        };
+      });
+      // Add date number row (with PH marking and yellow background if public holiday)
       excelRows.push([
         '',
-        ...weekDates.map((d) => (d ? format(d, 'd') : ''))
+        ...weekDates.map((d, i) => {
+          if (!d) return '';
+          const dateStr = format(d, 'yyyy-MM-dd');
+          const isPH = publicHolidays.includes(dateStr);
+          const label = `${getOrdinal(d.getDate())}${isPH ? ' (PH)' : ''}`;
+          return label;
+        })
       ]);
+      currentRow++;
 
-      staff.forEach((s) => {
-        const row: string[] = [];
+      // Apply bold+italic and center alignment to date number row cells
+      weekDates.forEach((d, i) => {
+        const colLetter = String.fromCharCode('B'.charCodeAt(0) + i);
+        const rowNum = currentRow; // 1-based index (date number row)
+        const dateStr = d ? format(d, 'yyyy-MM-dd') : '';
+        const isPH = d && publicHolidays.includes(dateStr);
+        cellStyles[`${colLetter}${rowNum}`] = {
+          ...(isPH
+            ? {
+                fill: {
+                  patternType: "solid",
+                  fgColor: { rgb: "FFF9C4" } // light yellow
+                },
+                font: { bold: true, italic: true },
+                alignment: { horizontal: "center", vertical: "center" }
+              }
+            : {
+                font: { bold: true, italic: true },
+                alignment: { horizontal: "center", vertical: "center" }
+              }
+          )
+        };
+      });
+
+      staff.forEach((s, staffIdx) => {
+        const row: (string | number)[] = [];
         row.push(s.name);
         for (let i = 0; i < 7; i++) {
           const d = weekDates[i];
@@ -203,47 +272,126 @@ export default function Home() {
           if (shiftsForStaff.length === 0) {
             row.push('');
           } else {
-            row.push(
-              shiftsForStaff
-                .map(
-                  (shift: ShiftWithStaff) =>
-                    `${shift.duration} ${shift.name}`
-                )
-                .join('\n')
-            );
+            // Only show the duration (not shift type), and set cell color
+            const shift = shiftsForStaff[0];
+            row.push(shift.duration); // Push as number, not string
+            // Use the color property from the shifts config data
+            const shiftConfig = shifts.find((sh) => sh.name === shift.name);
+            let fillColor = '';
+            if (shiftConfig && shiftConfig.color) {
+              // Remove leading # if present and convert to uppercase for Excel
+              fillColor = shiftConfig.color.replace('#', '').toUpperCase();
+            }
+            // Excel cell address: e.g. B3, C3, etc.
+            const colLetter = String.fromCharCode('B'.charCodeAt(0) + i);
+            const rowNum = currentRow + 1;
+            if (fillColor) {
+              cellStyles[`${colLetter}${rowNum}`] = {
+                fill: {
+                  patternType: "solid",
+                  fgColor: { rgb: fillColor }
+                }
+              };
+            }
+            // Set cell type to number for aggregation
+            cellTypes[`${colLetter}${rowNum}`] = { t: 'n' };
           }
         }
         excelRows.push(row);
+        currentRow++;
       });
 
       excelRows.push(['']);
+      currentRow++;
+
+      // Track end row for this week block (exclude the empty row)
+      weekBlocks.push({ start: blockStartRow, end: currentRow - 1 });
     });
 
-    // Create worksheet and workbook
-    const ws = XLSX.utils.aoa_to_sheet(excelRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Roster');
+    // Apply thick outside border for each week block
+    weekBlocks.forEach(({ start, end }) => {
+      // Columns A-H (0-7)
+      for (let colIdx = 0; colIdx <= 7; colIdx++) {
+        const colLetter = String.fromCharCode('A'.charCodeAt(0) + colIdx);
+
+        // Top border
+        const topCell = `${colLetter}${start}`;
+        cellStyles[topCell] = {
+          ...cellStyles[topCell],
+          border: {
+            ...(cellStyles[topCell]?.border || {}),
+            top: { style: "thick", color: { rgb: "000000" } }
+          }
+        };
+
+        // Bottom border
+        const bottomCell = `${colLetter}${end}`;
+        cellStyles[bottomCell] = {
+          ...cellStyles[bottomCell],
+          border: {
+            ...(cellStyles[bottomCell]?.border || {}),
+            bottom: { style: "thick", color: { rgb: "000000" } }
+          }
+        };
+      }
+      // Left and right borders for all rows in block
+      for (let row = start; row <= end; row++) {
+        // Left border (A)
+        const leftCell = `A${row}`;
+        cellStyles[leftCell] = {
+          ...cellStyles[leftCell],
+          border: {
+            ...(cellStyles[leftCell]?.border || {}),
+            left: { style: "thick", color: { rgb: "000000" } }
+          }
+        };
+        // Right border (H)
+        const rightCell = `H${row}`;
+        cellStyles[rightCell] = {
+          ...cellStyles[rightCell],
+          border: {
+            ...(cellStyles[rightCell]?.border || {}),
+            right: { style: "thick", color: { rgb: "000000" } }
+          }
+        };
+      }
+    });
+
+    // Create worksheet and workbook using xlsx-js-style
+    const ws = XLSXStyle.utils.aoa_to_sheet(excelRows);
+
+    // Apply cell styles for shift colors and borders
+    Object.entries(cellStyles).forEach(([cell, style]) => {
+      if (!ws[cell]) ws[cell] = { t: 'n', v: 0 }; // Default to number type
+      ws[cell].s = style;
+    });
+
+    // Apply cell types for duration cells (force as number)
+    Object.entries(cellTypes).forEach(([cell, typeObj]) => {
+      if (ws[cell]) {
+        ws[cell].t = 'n';
+        // If value is string, try to convert to number
+        if (typeof ws[cell].v === 'string') {
+          const num = Number(ws[cell].v);
+          if (!isNaN(num)) ws[cell].v = num;
+        }
+      }
+    });
+
+    const wb = XLSXStyle.utils.book_new();
+    XLSXStyle.utils.book_append_sheet(wb, ws, 'Roster');
 
     // Download Excel file
     const fromDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : 'unknown';
     const toDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : 'unknown';
     const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
-    XLSX.writeFile(wb, `Roster_Weekly_${fromDate}_to_${toDate}_${timestamp}.xlsx`);
+    XLSXStyle.writeFile(wb, `Roster_Weekly_${fromDate}_to_${toDate}_${timestamp}.xlsx`);
   };
 
   const handleResetConfiguration = () => {
     setCategories(defaultCategories);
     setStaff(defaultStaff);
     setShifts(defaultShifts);
-  };
-
-  const shiftColors: { [key: string]: string } = {
-    'Regular day': 'bg-blue-500',
-    'Evening': 'bg-green-500',
-    'Night': 'bg-red-500',
-    'Clinic': 'bg-yellow-500',
-    'Day (Weekend)': 'bg-purple-500',
-    'Night (Weekend)': 'bg-pink-500',
   };
 
   const formattedDateRange = dateRange.from && dateRange.to
@@ -906,118 +1054,134 @@ export default function Home() {
             <div className="mt-4">
               <h3 className="text-lg font-bold">Shift Legend</h3>
               <div className="flex gap-4 mt-2">
-                {Object.entries(shiftColors).map(([shiftName, color]) => (
-                  <div key={shiftName} className="flex items-center gap-2">
-                    <span className={`w-4 h-4 rounded-full ${color}`}></span>
-                    <span>{shiftName}</span>
-                  </div>
+              {shifts
+                .filter(shift => shift.color)
+                .map((shift) => (
+                <div key={shift.name} className="flex items-center gap-2">
+                  <span
+                  className="w-4 h-4 rounded-full"
+                  style={{ backgroundColor: shift.color }}
+                  ></span>
+                  <span>{shift.name}</span>
+                </div>
                 ))}
               </div>
             </div>
+            <div className="my-6" />
             {dateRange.from && dateRange.to ? (
               <div className="overflow-x-auto">
               {(() => {
-                const months = [];
-                let currentDate = new Date(dateRange.from);
+              const months = [];
+              let currentDate = new Date(dateRange.from);
 
-                // Generate tables for each month in the range
-                while (currentDate <= dateRange.to) {
-                const start = startOfMonth(currentDate);
-                const end = endOfMonth(currentDate);
-                const days = eachDayOfInterval({ start, end });
-                // Get the starting day of the week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-                // We want weeks to start on Monday, so adjust accordingly
-                const firstDayOfWeek = (getDay(start) + 6) % 7; // 0=Mon, 6=Sun
+              // Generate tables for each month in the range
+              while (currentDate <= dateRange.to) {
+              const start = startOfMonth(currentDate);
+              const end = endOfMonth(currentDate);
+              const days = eachDayOfInterval({ start, end });
+              // Get the starting day of the week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+              // We want weeks to start on Monday, so adjust accordingly
+              const firstDayOfWeek = (getDay(start) + 6) % 7; // 0=Mon, 6=Sun
+              const headerBg = "#e0e7ff"; // light indigo (different from weekendBg)
+              months.push(
+              <div key={format(start, 'yyyy-MM')} className="mb-8">
+              <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
+              <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+              <thead>
+              <tr>
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+              <th
+              key={day}
+              className="border border-gray-300 p-2"
+              style={{ backgroundColor: headerBg }}
+              >
+              {day}
+              </th>
+              ))}
+              </tr>
+              </thead>
+              <tbody>
+              {(() => {
+              const rows = [];
+              let cells: JSX.Element[] = [];
 
-                months.push(
-                <div key={format(start, 'yyyy-MM')}>
-                <h3 className="text-lg font-bold mb-4">{format(start, 'MMMM yyyy')}</h3>
-                <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
-                  <thead>
-                  <tr>
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                  <th key={day} className="border border-gray-300 p-2 bg-gray-100">
-                    {day}
-                  </th>
-                  ))}
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {(() => {
-                  const rows = [];
-                  let cells: JSX.Element[] = [];
+              // Add empty cells for days before the first day of the month (Monday as first day)
+              for (let i = 0; i < firstDayOfWeek; i++) {
+              cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
+              }
 
-                  // Add empty cells for days before the first day of the month (Monday as first day)
-                  for (let i = 0; i < firstDayOfWeek; i++) {
-                  cells.push(<td key={`empty-${i}`} className="border border-gray-300 p-4"></td>);
-                  }
+              // Add cells for each day of the month
+              days.forEach((day) => {
+              const formattedDay = format(day, 'yyyy-MM-dd');
+              const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
+              // Adjust getDay: 0=Sunday, 1=Monday, ..., 6=Saturday
+              // For Mon-Sun: 0=Mon, ..., 6=Sun
+              const adjustedDay = (getDay(day) + 6) % 7;
+              const isWeekend = adjustedDay === 5 || adjustedDay === 6; // Sat or Sun
+              const isPublicHoliday = publicHolidays.includes(formattedDay);
 
-                  // Add cells for each day of the month
-                  days.forEach((day) => {
-                  const formattedDay = format(day, 'yyyy-MM-dd');
-                  const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
-                  // Adjust getDay: 0=Sunday, 1=Monday, ..., 6=Saturday
-                  // For Mon-Sun: 0=Mon, ..., 6=Sun
-                  const adjustedDay = (getDay(day) + 6) % 7;
-                  const isWeekend = adjustedDay === 5 || adjustedDay === 6; // Sat or Sun
-                  const isPublicHoliday = publicHolidays.includes(formattedDay);
+              // Use a very light gray for weekends so all shift colors are visible
+              const weekendBg = "#f5f5f5";
 
-                  cells.push(
-                    <td
-                    key={formattedDay}
-                    className={`border border-gray-300 p-4 align-top ${
-                    isWeekend
-                    ? 'bg-blue-100'
-                    : isPublicHoliday
-                    ? 'bg-yellow-100'
-                    : ''
-                    }`}
-                    >
-                    <div className="font-bold">{format(day, 'd')}</div>
-                    {dayRoster && (
-                    <div className="text-xs mt-2">
-                    {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
-                      <div key={index} className="flex items-center text-gray-600">
-                      <span
-                      className={`w-2 h-2 rounded-full ${
-                      shiftColors[shift.name] || 'bg-gray-400'
-                      } mr-2`}
-                      ></span>
-                      {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
-                      </div>
-                    ))}
-                    </div>
-                    )}
-                    </td>
-                  );
+              cells.push(
+              <td
+              key={formattedDay}
+              className={`border border-gray-300 p-4 align-top`}
+              style={{
+              backgroundColor: isPublicHoliday
+              ? "#FFF9C4" // light yellow for public holidays
+              : isWeekend
+              ? weekendBg
+              : undefined
+              }}
+              >
+              <div className="font-bold">{format(day, 'd')}</div>
+              {dayRoster && (
+              <div className="text-xs mt-2">
+              {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
+              <div key={index} className="flex items-center text-gray-600">
+              <span
+              className="w-2 h-2 rounded-full mr-2"
+              style={{
+                backgroundColor:
+                (shifts.find((s) => s.name === shift.name)?.color) || '#ccc'
+              }}
+              ></span>
+              {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
+              </div>
+              ))}
+              </div>
+              )}
+              </td>
+              );
 
-                  // If the week is complete, push the row and reset cells
-                  if (cells.length === 7) {
-                    rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
-                    cells = [];
-                  }
-                  });
+              // If the week is complete, push the row and reset cells
+              if (cells.length === 7) {
+              rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+              cells = [];
+              }
+              });
 
-                  // Add remaining cells to the last row
-                  if (cells.length > 0) {
-                  while (cells.length < 7) {
-                    cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
-                  }
-                  rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
-                  }
+              // Add remaining cells to the last row
+              if (cells.length > 0) {
+              while (cells.length < 7) {
+              cells.push(<td key={`empty-${cells.length}`} className="border border-gray-300 p-4"></td>);
+              }
+              rows.push(<tr key={`row-${rows.length}`}>{cells}</tr>);
+              }
 
-                  return rows;
-                  })()}
-                  </tbody>
-                </table>
-                </div>
-                );
+              return rows;
+              })()}
+              </tbody>
+              </table>
+              </div>
+              );
 
-                // Move to the next month
-                currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-                }
+              // Move to the next month
+              currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+              }
 
-                return months;
+              return months;
               })()}
               </div>
             ) : (
