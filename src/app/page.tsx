@@ -35,7 +35,7 @@ const defaultShifts = [
   { order: 4, name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C'] },
   { order: 5, name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'AT-C', 'BT'], color: '#DDEBF7' },
   { order: 6, name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], categories: ['AT', 'BT'], color: '#FCE4D6' },
-  { order: 7, name: 'Annual Leave', startTime: '00:00', endTime: '23:30', duration: 8, days: [], categories: ['AT', 'AT-C', 'BT'], color: '#B34CAF' },
+  { order: 7, name: 'Annual Leave', startTime: '00:00', endTime: '23:30', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], categories: ['AT', 'AT-C', 'BT'], color: '#B34CAF' },
 ];
 
 const defaultFixedShifts = [
@@ -60,6 +60,24 @@ const defaultSpecialRules = [
     gapDays: 3,
   },
 ];
+
+const defaultLeaves = [
+    {
+      staff: 'AT-3',
+      from: new Date('2025-05-19'),
+      to: new Date('2025-05-30'),
+    },
+    {
+      staff: 'AT-2',
+      from: new Date('2025-06-23'),
+      to: new Date('2025-06-27'),
+    },,
+    {
+      staff: 'AT-C',
+      from: new Date('2025-07-07'),
+      to: new Date('2025-07-11'),
+    },
+  ];
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2).toString().padStart(2, '0');
@@ -107,13 +125,7 @@ export default function Home() {
   const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
   const [publicHolidays, setPublicHolidaysState] = useState<string[]>([]);
   const [specialRules, setSpecialRules] = useState(defaultSpecialRules);
-  const [leaves, setLeaves] = useState([
-    {
-      staff: 'AT-3',
-      from: new Date('2025-05-19'),
-      to: new Date('2025-05-30'),
-    },
-  ]);
+  const [leaves, setLeaves] = useState(defaultLeaves);
 
   const setPublicHolidays = useCallback((holidays: { name: string; date: string }[]) => {
     setPublicHolidaysState(holidays.map((holiday) => holiday.date));
@@ -543,6 +555,13 @@ export default function Home() {
       const dayRoster = {
         date: dateStr,
         shifts: applicableShifts.map((shift) => {
+
+            // Process leave for the staff based on leaves
+            const leaveResult = processLeave(shift, roster, assignedStaff, leaves.filter((l): l is { staff: string; from: Date; to: Date } => l !== undefined), currentDate);
+            if (leaveResult) {
+            return leaveResult;
+            }
+
           // Process fixed shifts and special rules as before
           const fixedShiftResult = processFixedShift(shift, dayOfWeek, roster, assignedStaff);
           if (fixedShiftResult) {
@@ -648,6 +667,41 @@ export default function Home() {
         if (!aIsSpecial && bIsSpecial) return 1;
         return 0;
       });
+  }
+  
+  function processLeave(
+    shift: any,
+    roster: {
+      shifts: (
+        | { order: number; name: string; startTime: string; endTime: string; duration: number; days: string[]; categories: string[]; color: string; }
+        | { order: number; name: string; startTime: string; endTime: string; duration: number; days: string[]; categories: string[]; color?: undefined; }
+      )[];
+      staff: { name: string; category: string; fte: number; }[];
+    },
+    assignedStaff: Set<string>,
+    leaves: { staff: string; from: Date; to: Date; }[],
+    currentDate: Date
+  ) {
+    // Only process if this shift is an "Annual Leave" shift
+    if (shift.name !== 'Annual Leave') return null;
+
+    // Find staff who are on leave for this date and eligible for this shift
+    const eligibleStaff = roster.staff.filter((s) =>
+      shift.categories?.includes(s.category) &&
+      !assignedStaff.has(s.name) &&
+      leaves.some(
+        (leave) =>
+          leave.staff === s.name &&
+          leave.from <= currentDate &&
+          leave.to >= currentDate
+      )
+    );
+
+    if (eligibleStaff.length === 0) return null;
+
+    // Assign all eligible staff to this leave shift (usually only one, but could be more)
+    eligibleStaff.forEach((s) => assignedStaff.add(s.name));
+    return { ...shift, staff: eligibleStaff };
   }
 
   function processFixedShift(shift: any, dayOfWeek: string, roster: any, assignedStaff: Set<string>) {
