@@ -8,19 +8,19 @@ import { PlusCircle, Trash2 } from 'lucide-react';
 
 interface Staff {
   name: string;
-  category: string;
+  staffCategory: string;
   fte: number;
 }
 
 interface StaffConfigurationProps {
   staff: Staff[];
-  categories: string[];
+  staffCategories: string[];
   setStaff: (staff: Staff[]) => void;
 }
 
-export default function StaffConfiguration({ staff, categories, setStaff }: StaffConfigurationProps) {
+export default function StaffConfiguration({ staff, staffCategories, setStaff }: StaffConfigurationProps) {
   const addStaff = () => {
-    setStaff([...staff, { name: '', category: categories[0], fte: 1 }]);
+    setStaff([...staff, { name: '', staffCategory: staffCategories[0], fte: 1 }]);
   };
 
   const removeStaff = (index: number) => {
@@ -56,18 +56,18 @@ export default function StaffConfiguration({ staff, categories, setStaff }: Staf
               <div>
                 <label className="block text-sm font-medium text-gray-700">Category</label>
                 <Select
-                  onValueChange={(value) => updateStaff(index, 'category', value)}
-                  defaultValue={s.category}
+                  onValueChange={(value) => updateStaff(index, 'staffCategory', value)}
+                  defaultValue={s.staffCategory}
                 >
                   <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select a category" />
+                    <SelectValue placeholder="Select a staff category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories
-                      .filter((category) => category.trim() !== '') // Exclude empty or invalid values
-                      .map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
+                    {staffCategories
+                      .filter((staffCategory) => staffCategory.trim() !== '') // Exclude empty or invalid values
+                      .map((staffCategory) => (
+                        <SelectItem key={staffCategory} value={staffCategory}>
+                          {staffCategory}
                         </SelectItem>
                       ))}
                   </SelectContent>

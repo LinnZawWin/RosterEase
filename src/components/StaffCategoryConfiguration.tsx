@@ -4,21 +4,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PlusCircle, Trash2 } from 'lucide-react';
+import { StaffCategory } from '@/models/StaffCategory';
 
 interface StaffCategoryConfigurationProps {
-  categories: string[];
-  setCategories: (categories: string[]) => void;
+  staffCategories: StaffCategory[];
+  setStaffCategories: (staffCategories: StaffCategory[]) => void;
 }
 
-export default function StaffCategoryConfiguration({ categories, setCategories }: StaffCategoryConfigurationProps) {
-  const addCategory = () => {
-    setCategories([...categories, '']);
+export default function StaffCategoryConfiguration({ staffCategories, setStaffCategories }: StaffCategoryConfigurationProps) {
+  const addStaffCategory = () => {
+    setStaffCategories([...staffCategories, '']);
   };
 
-  const removeCategory = (index: number) => {
-    const newCategories = [...categories];
-    newCategories.splice(index, 1);
-    setCategories(newCategories);
+  const removeStaffCategory = (index: number) => {
+    const newStaffCategories = [...staffCategories];
+    newStaffCategories.splice(index, 1);
+    setStaffCategories(newStaffCategories);
   };
 
   return (
@@ -31,29 +32,29 @@ export default function StaffCategoryConfiguration({ categories, setCategories }
       </CardHeader>
       <CardContent>
     <div>
-      {categories.map((category, index) => (
+      {staffCategories.map((staffCategory, index) => (
         <div key={index} className="mb-4 border rounded p-4">
           <div className="grid grid-cols-1 gap-2">
             <div>
               <label className="block text-sm font-medium text-gray-700">Category Name</label>
               <Input
                 type="text"
-                value={category}
+                value={staffCategory}
                 onChange={(e) => {
-                  const newCategories = [...categories];
-                  newCategories[index] = e.target.value;
-                  setCategories(newCategories);
+                  const newStaffCategories = [...staffCategories];
+                  newStaffCategories[index] = e.target.value;
+                  setStaffCategories(newStaffCategories);
                 }}
               />
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => removeCategory(index)}>
+          <Button variant="ghost" size="sm" onClick={() => removeStaffCategory(index)}>
             <Trash2 className="mr-2 h-4 w-4" />
             Remove
           </Button>
         </div>
       ))}
-      <Button variant="secondary" onClick={addCategory}>
+      <Button variant="secondary" onClick={addStaffCategory}>
         <PlusCircle className="mr-2 h-4 w-4" />
         Add Category
       </Button>
