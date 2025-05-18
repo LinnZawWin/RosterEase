@@ -5,19 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import dynamic from 'next/dynamic';
 import { PlusCircle, Trash2 } from 'lucide-react';
+import { Staff } from '@/models/Staff';
+import { Shift } from '@/models/Shift';
 
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
 
 interface FixedShift {
-  staff: string;
-  shift: string;
+  staff: Staff;
+  shift: Shift;
   days: string[];
 }
 
 interface FixedShiftConfigurationProps {
   fixedShifts: FixedShift[];
-  staff: { name: string }[];
-  shifts: { name: string }[];
+  staff: Staff[];
+  shifts: Shift[];
   daysOfWeekOptions: { value: string; label: string }[];
   updateFixedShift: (index: number, field: string, value: any) => void;
   removeFixedShift: (index: number) => void;
@@ -46,8 +48,11 @@ export default function FixedShiftConfiguration({
               <div>
                 <label className="block text-sm font-medium text-gray-700">Staff</label>
                 <Select
-                  onValueChange={(value) => updateFixedShift(index, 'staff', value)}
-                  defaultValue={fixedShift.staff}
+                  onValueChange={(value) => {
+                    const selectedStaff = staff.find((s) => s.name === value);
+                    updateFixedShift(index, 'staff', selectedStaff || null);
+                  }}
+                  value={fixedShift.staff?.name || ''}
                 >
                   <SelectTrigger className="w-[100px]">
                     <SelectValue placeholder="Select Staff" />
@@ -66,8 +71,11 @@ export default function FixedShiftConfiguration({
               <div>
                 <label className="block text-sm font-medium text-gray-700">Shift</label>
                 <Select
-                  onValueChange={(value) => updateFixedShift(index, 'shift', value)}
-                  defaultValue={fixedShift.shift}
+                  onValueChange={(value) => {
+                    const selectedShift = shifts.find((shift) => shift.name === value);
+                    updateFixedShift(index, 'shift', selectedShift || null);
+                  }}
+                  value={fixedShift.shift?.name || ''}
                 >
                   <SelectTrigger className="w-[100px]">
                     <SelectValue placeholder="Select Shift" />

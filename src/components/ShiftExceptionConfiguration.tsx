@@ -5,19 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import dynamic from 'next/dynamic';
 import { PlusCircle, Trash2 } from 'lucide-react';
+import { Staff } from '@/models/Staff';
+import { Shift } from '@/models/Shift';
 
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
 
 interface ShiftException {
-  staff: string;
-  shift: string;
+  staff: Staff | null;
+  shift: Shift | null;
   days: string[];
 }
 
 interface ShiftExceptionConfigurationProps {
   shiftExceptions: ShiftException[];
-  staff: { name: string }[];
-  shifts: { name: string }[];
+  staff: Staff[];
+  shifts: Shift[];
   daysOfWeekOptions: { value: string; label: string }[];
   updateShiftException: (index: number, field: string, value: any) => void;
   removeShiftException: (index: number) => void;
@@ -46,15 +48,19 @@ export default function ShiftExceptionConfiguration({
               <div>
                 <label className="block text-sm font-medium text-gray-700">Staff</label>
                 <Select
-                  onValueChange={(value) => updateShiftException(index, 'staff', value)}
-                  defaultValue={exception.staff}
+                  onValueChange={(value) => {
+                    const selectedStaff = staff.find((s) => s.name === value) || null;
+                    updateShiftException(index, 'staff', selectedStaff);
+                  }}
+                  value={exception.staff?.name || ''}
+                  defaultValue={exception.staff?.name || ''}
                 >
                   <SelectTrigger className="w-[100px]">
                     <SelectValue placeholder="Select Staff" />
                   </SelectTrigger>
                   <SelectContent>
                     {staff
-                      .filter((s) => s.name.trim() !== '') // Exclude empty or invalid values
+                      .filter((s) => s.name.trim() !== '')
                       .map((s) => (
                         <SelectItem key={s.name} value={s.name}>
                           {s.name}
@@ -66,15 +72,19 @@ export default function ShiftExceptionConfiguration({
               <div>
                 <label className="block text-sm font-medium text-gray-700">Shift</label>
                 <Select
-                  onValueChange={(value) => updateShiftException(index, 'shift', value)}
-                  defaultValue={exception.shift}
+                  onValueChange={(value) => {
+                    const selectedShift = shifts.find((shift) => shift.name === value) || null;
+                    updateShiftException(index, 'shift', selectedShift);
+                  }}
+                  value={exception.shift?.name || ''}
+                  defaultValue={exception.shift?.name || ''}
                 >
                   <SelectTrigger className="w-[100px]">
                     <SelectValue placeholder="Select Shift" />
                   </SelectTrigger>
                   <SelectContent>
                     {shifts
-                      .filter((shift) => shift.name.trim() !== '') // Exclude empty or invalid values
+                      .filter((shift) => shift.name.trim() !== '')
                       .map((shift) => (
                         <SelectItem key={shift.name} value={shift.name}>
                           {shift.name}

@@ -56,15 +56,15 @@ const defaultShifts = [
 
 const defaultFixedShifts = [
   {
-    staff: 'AT-C',
-    shift: 'Clinic',
+    staff: defaultStaff.find(s => s.name === 'AT-C')!,
+    shift: defaultShifts.find(shift => shift.name === 'Clinic')!,
     days: ['Mon', 'Wed', 'Thu'],
   },
 ];
 const defaultShiftExceptions = [
   {
-    staff: 'AT-C',
-    shift: 'Clinic',
+    staff: defaultStaff.find(s => s.name === 'AT-C')!,
+    shift: defaultShifts.find(shift => shift.name === 'Clinic')!,
     days: ['Tue', 'Fri'],
   },
 ];
@@ -137,13 +137,13 @@ export default function Home() {
     to: null,
   });
 
-  const [staffCategories, setStaffCategories] = useState(defaultStaffCategories);
-  const [staff, setStaff] = useState(defaultStaff);
-  const [shiftCategories, setShiftCategories] = useState<string[]>(defaultShiftCategories);
-  const [shifts, setShifts] = useState(defaultShifts);
+  const [staffCategories, setStaffCategories] = useState<StaffCategory[]>(defaultStaffCategories);
+  const [staff, setStaff] = useState<Staff[]>(defaultStaff);
+  const [shiftCategories, setShiftCategories] = useState<ShiftCategory[]>(defaultShiftCategories);
+  const [shifts, setShifts] = useState<Shift[]>(defaultShifts);
   const [calendarData, setCalendarData] = useState<any[]>([]);
-  const [fixedShifts, setFixedShifts] = useState(defaultFixedShifts);
-  const [shiftExceptions, setShiftExceptions] = useState(defaultShiftExceptions);
+  const [fixedShifts, setFixedShifts] = useState<FixedShift[]>(defaultFixedShifts);
+  const [shiftExceptions, setShiftExceptions] = useState<ShiftException[]>(defaultShiftExceptions);
   const [publicHolidays, setPublicHolidaysState] = useState<string[]>([]);
   const [consecutiveShiftAssignmentRules, setConsecutiveShiftAssignmentRules] = useState<ConsecutiveShiftAssignmentRule[]>(defaultConsecutiveShiftAssignmentRules);
   const [leaves, setLeaves] = useState(defaultLeaves);
@@ -252,17 +252,17 @@ export default function Home() {
   const updateFixedShift = (index: number, field: string, value: any) => {
     const newFixedShifts = [...calendarData];
     newFixedShifts[index] = { ...newFixedShifts[index], [field]: value };
-    setCalendarData(newFixedShifts);
+    setFixedShifts(newFixedShifts);
   };
   
   const removeFixedShift = (index: number) => {
     const newFixedShifts = [...calendarData];
     newFixedShifts.splice(index, 1);
-    setCalendarData(newFixedShifts);
+    setFixedShifts(newFixedShifts);
   };
 
   const addFixedShift = () => {
-    setCalendarData([...calendarData, { staff: '', shift: '', days: [] }]);
+    setFixedShifts([...calendarData, { staff: '', shift: '', days: [] }]);
   };
 
   const updateShiftException = (index: number, field: string, value: any) => {
@@ -278,7 +278,7 @@ export default function Home() {
   };
 
   const addShiftException = () => {
-    setShiftExceptions([...shiftExceptions, { staff: '', shift: '', days: [] }]);
+    setShiftExceptions([...shiftExceptions, { staff: staff[0] || null, shift: shifts[0] || null, days: [] }]);
   };
   
   // Add this at the top of your component
