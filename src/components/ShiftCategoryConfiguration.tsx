@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +12,13 @@ interface ShiftCategoryConfigurationProps {
 }
 
 export default function ShiftCategoryConfiguration({ shiftCategories, setShiftCategories }: ShiftCategoryConfigurationProps) {
+  // Local state for input editing
+  const [localValues, setLocalValues] = useState<string[]>(shiftCategories);
+
+  useEffect(() => {
+    setLocalValues(shiftCategories);
+  }, [shiftCategories]);
+
   const addCategory = () => {
     setShiftCategories([...shiftCategories, '']);
   };
@@ -21,41 +29,60 @@ export default function ShiftCategoryConfiguration({ shiftCategories, setShiftCa
     setShiftCategories(newCategories);
   };
 
+  const handleInputChange = (idx: number, value: string) => {
+    const updated = [...localValues];
+    updated[idx] = value;
+    setLocalValues(updated);
+  };
+
+  const handleInputBlur = (idx: number) => {
+    if (localValues[idx] !== shiftCategories[idx]) {
+      const updated = [...shiftCategories];
+      updated[idx] = localValues[idx];
+      setShiftCategories(updated);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Shift Category Configuration</CardTitle>
+        <CardTitle>Shift Categories</CardTitle>
         <CardDescription>
-          Configure categories for the shifts (e.g., Day, Night).
+          Configure the categories of the shift.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div>
-          {shiftCategories.map((category, index) => (
-            <div key={index} className="mb-4 border rounded p-4">
-              <div className="grid grid-cols-1 gap-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Category Name</label>
-                  <Input
-                    type="text"
-                    value={category}
-                    onChange={(e) => {
-                      const newCategories = [...shiftCategories];
-                      newCategories[index] = e.target.value;
-                      setShiftCategories(newCategories);
-                    }}
-                  />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => removeCategory(index)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Remove
+        <div className="flex flex-col gap-2">
+          {localValues.map((cat, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <Input
+                className="py-1 px-2 h-8 text-sm w-36"
+                maxLength={20}
+                value={cat}
+                onChange={e => handleInputChange(idx, e.target.value)}
+                onBlur={() => handleInputBlur(idx)}
+                placeholder={`e.g. Day, Night, etc.`}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => removeCategory(idx)}
+                disabled={shiftCategories.length <= 1}
+                aria-label="Remove"
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           ))}
-          <Button variant="secondary" onClick={addCategory}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Category
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 self-start"
+            onClick={addCategory}
+            aria-label="Add"
+          >
+            <PlusCircle className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>

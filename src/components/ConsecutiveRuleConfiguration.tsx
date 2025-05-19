@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +23,26 @@ export default function ConsecutiveRuleConfiguration({
   staff,
   setConsecutiveShiftAssignmentRules,
 }: ConsecutiveRuleConfigurationProps) {
+  const [localRules, setLocalRules] = useState<ConsecutiveShiftAssignmentRule[]>(consecutiveShiftAssignmentRules);
+
+  useEffect(() => {
+    setLocalRules(consecutiveShiftAssignmentRules);
+  }, [consecutiveShiftAssignmentRules]);
+
+  const handleLocalChange = (index: number, field: keyof ConsecutiveShiftAssignmentRule, value: any) => {
+    const updated = [...localRules];
+    updated[index] = { ...updated[index], [field]: value };
+    setLocalRules(updated);
+  };
+
+  const handleBlur = (index: number, field: keyof ConsecutiveShiftAssignmentRule) => {
+    if (localRules[index][field] !== consecutiveShiftAssignmentRules[index][field]) {
+      const updated = [...consecutiveShiftAssignmentRules];
+      updated[index] = { ...updated[index], [field]: localRules[index][field] };
+      setConsecutiveShiftAssignmentRules(updated);
+    }
+  };
+
   const addRule = () => {
     setConsecutiveShiftAssignmentRules([
       ...consecutiveShiftAssignmentRules,
@@ -30,129 +51,179 @@ export default function ConsecutiveRuleConfiguration({
   };
 
   const removeRule = (index: number) => {
-    const updatedRules = [...consecutiveShiftAssignmentRules];
-    updatedRules.splice(index, 1);
-    setConsecutiveShiftAssignmentRules(updatedRules);
-  };
-
-  const updateRule = (index: number, field: keyof ConsecutiveShiftAssignmentRule, value: any) => {
-    const updatedRules = [...consecutiveShiftAssignmentRules];
-    updatedRules[index] = { ...updatedRules[index], [field]: value };
-    // Reset fields when type changes
-    if (field === 'type') {
-      if (value === 'Shift') {
-        updatedRules[index].shifts = [];
-      } else {
-        updatedRules[index].staffMembers = [];
-      }
-    }
-    setConsecutiveShiftAssignmentRules(updatedRules);
+    const updated = [...consecutiveShiftAssignmentRules];
+    updated.splice(index, 1);
+    setConsecutiveShiftAssignmentRules(updated);
   };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Consecutive Shift Assignment Rules</CardTitle>
-        <CardDescription>Configure special rules for shift assignments.</CardDescription>
+        <CardDescription>
+          Configure rules to limit consecutive assignments for specific shifts or staff.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        {consecutiveShiftAssignmentRules.map((rule, index) => (
-          <div key={index} className="mb-4 border rounded p-4">
-            <div className="grid grid-cols-4 gap-2">
-              {/* Type Dropdown */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Type</label>
-                <Select
-                  onValueChange={(value) => updateRule(index, 'type', value as 'Shift' | 'Staff')}
-                  defaultValue={rule.type || 'Shift'}
-                  value={rule.type || 'Shift'}
-                >
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Select Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Shift">Shift</SelectItem>
-                    <SelectItem value="Staff">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Show/hide based on type */}
+        <div className="flex flex-col gap-2">
+          {localRules.map((rule, index) => (
+            <div key={index} className="flex flex-col sm:flex-row items-center gap-2 rounded p-2">
+              <Select
+                onValueChange={(value) => handleLocalChange(index, 'type', value as 'Shift' | 'Staff')}
+                value={rule.type || 'Shift'}
+              >
+                <SelectTrigger className="w-28 h-8 text-sm">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Shift">Shift</SelectItem>
+                  <SelectItem value="Staff">Staff</SelectItem>
+                </SelectContent>
+              </Select>
               {rule.type === 'Shift' ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Applicable Shifts</label>
+                <div className="min-w-[160px]">
                   <ReactSelect
                     isMulti
                     options={shifts.map((shift) => ({ value: shift.name, label: shift.name }))}
                     value={rule.shifts.map((shift) => ({ value: shift, label: shift }))}
                     onChange={(newValue) =>
-                      updateRule(index, 'shifts', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
+                      handleLocalChange(
+                        index,
+                        'shifts',
+                        Array.isArray(newValue) ? newValue.map((v) => v.value) : []
+                      )
                     }
-                    placeholder="Select shifts"
+                    placeholder="Shifts"
+                    classNamePrefix="react-select"
+                    styles={{
+                      container: (base) => ({
+                        ...base,
+                        width: 250,
+                        minWidth: 250,
+                        maxWidth: 250,
+                      }),
+                      control: (base) => ({
+                        ...base,
+                        minHeight: '32px',
+                        height: 'auto',
+                        fontSize: '0.875rem',
+                        flexWrap: 'wrap',
+                      }),
+                      valueContainer: (base) => ({
+                        ...base,
+                        padding: '0 6px',
+                        minHeight: '32px',
+                        maxHeight: '64px',
+                        overflowY: 'auto',
+                        alignItems: 'flex-start',
+                      }),
+                      multiValue: (base) => ({
+                        ...base,
+                        margin: '2px 2px',
+                      }),
+                    }}
+                    menuPlacement="auto"
+                    isClearable={false}
                   />
                 </div>
               ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Applicable Staff</label>
+                <div className="min-w-[160px]">
                   <ReactSelect
                     isMulti
                     options={staff.map((s) => ({ value: s.name, label: s.name }))}
                     value={rule.staffMembers.map((s) => ({ value: s, label: s }))}
                     onChange={(newValue) =>
-                      updateRule(index, 'staffMembers', Array.isArray(newValue) ? newValue.map((v) => v.value) : [])
+                      handleLocalChange(
+                        index,
+                        'staffMembers',
+                        Array.isArray(newValue) ? newValue.map((v) => v.value) : []
+                      )
                     }
-                    placeholder="Select staff"
+                    placeholder="Staff"
+                    classNamePrefix="react-select"
+                    styles={{
+                      container: (base) => ({
+                        ...base,
+                        width: 250,
+                        minWidth: 250,
+                        maxWidth: 250,
+                      }),
+                      control: (base) => ({
+                        ...base,
+                        minHeight: '32px',
+                        height: 'auto',
+                        fontSize: '0.875rem',
+                        flexWrap: 'wrap',
+                      }),
+                      valueContainer: (base) => ({
+                        ...base,
+                        padding: '0 6px',
+                        minHeight: '32px',
+                        maxHeight: '64px',
+                        overflowY: 'auto',
+                        alignItems: 'flex-start',
+                      }),
+                      multiValue: (base) => ({
+                        ...base,
+                        margin: '2px 2px',
+                      }),
+                    }}
+                    menuPlacement="auto"
+                    isClearable={false}
                   />
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700">No. of Consecutive Days</label>
-                <Select
-                  onValueChange={(value) => updateRule(index, 'consecutiveDays', parseInt(value, 10))}
-                  defaultValue={rule.consecutiveDays.toString()}
-                  value={rule.consecutiveDays.toString()}
-                >
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Select Consecutive Days" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
-                      <SelectItem key={value} value={value.toString()}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">No. of Gap Days</label>
-                <Select
-                  onValueChange={(value) => updateRule(index, 'gapDays', parseInt(value, 10))}
-                  defaultValue={rule.gapDays.toString()}
-                  value={rule.gapDays.toString()}
-                >
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Select Gap Days" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
-                      <SelectItem key={value} value={value.toString()}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select
+                onValueChange={(value) => handleLocalChange(index, 'consecutiveDays', parseInt(value, 10))}
+                value={rule.consecutiveDays.toString()}
+              >
+                <SelectTrigger className="w-24 h-8 text-sm">
+                  <SelectValue placeholder="Consecutive" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
+                    <SelectItem key={value} value={value.toString()}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                onValueChange={(value) => handleLocalChange(index, 'gapDays', parseInt(value, 10))}
+                value={rule.gapDays.toString()}
+              >
+                <SelectTrigger className="w-24 h-8 text-sm">
+                  <SelectValue placeholder="Gap" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 9 }, (_, i) => i + 1).map((value) => (
+                    <SelectItem key={value} value={value.toString()}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => removeRule(index)}
+                aria-label="Remove"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => removeRule(index)}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Remove
-            </Button>
-          </div>
-        ))}
-        <Button variant="secondary" onClick={addRule}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Special Rule
-        </Button>
+          ))}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 self-start"
+            onClick={addRule}
+            aria-label="Add"
+          >
+            <PlusCircle className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

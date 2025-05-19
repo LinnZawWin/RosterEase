@@ -24,7 +24,7 @@ interface PublicHolidayConfigurationProps {
 }
 
 export default function PublicHolidayConfiguration({ dateRange, setPublicHolidays }: PublicHolidayConfigurationProps) {
-  const [publicHolidays, setLocalPublicHolidays] = useState<PublicHoliday[]>([]); // Local state for holidays
+  const [publicHolidays, setLocalPublicHolidays] = useState<PublicHoliday[]>([]);
   const [selectedState, setSelectedState] = useState("AU-NSW");
 
   const fetchPublicHolidays = async () => {
@@ -55,8 +55,8 @@ export default function PublicHolidayConfiguration({ dateRange, setPublicHoliday
           date: holiday.date,
         }));
 
-        setLocalPublicHolidays(updatedHolidays); // Update local state
-        setPublicHolidays(updatedHolidays); // Pass data back to the parent
+        setLocalPublicHolidays(updatedHolidays);
+        setPublicHolidays(updatedHolidays);
       } catch (error) {
         console.error('Error fetching public holidays:', error);
         alert('Failed to retrieve public holidays. Please try again later.');
@@ -65,29 +65,29 @@ export default function PublicHolidayConfiguration({ dateRange, setPublicHoliday
   };
 
   useEffect(() => {
-    // Only fetch holidays if dateRange is valid
     if (dateRange.from && dateRange.to) {
       fetchPublicHolidays();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange, setPublicHolidays]);
 
   const addPublicHoliday = () => {
     setLocalPublicHolidays([...publicHolidays, { name: '', date: '' }]);
-    setPublicHolidays([...publicHolidays, { name: '', date: '' }]); // Sync with parent
+    setPublicHolidays([...publicHolidays, { name: '', date: '' }]);
   };
 
   const updatePublicHoliday = (index: number, field: string, value: string) => {
     const updatedHolidays = [...publicHolidays];
     updatedHolidays[index] = { ...updatedHolidays[index], [field]: value };
     setLocalPublicHolidays(updatedHolidays);
-    setPublicHolidays(updatedHolidays); // Sync with parent
+    setPublicHolidays(updatedHolidays);
   };
 
   const removePublicHoliday = (index: number) => {
     const updatedHolidays = [...publicHolidays];
     updatedHolidays.splice(index, 1);
     setLocalPublicHolidays(updatedHolidays);
-    setPublicHolidays(updatedHolidays); // Sync with parent
+    setPublicHolidays(updatedHolidays);
   };
 
   return (
@@ -99,75 +99,89 @@ export default function PublicHolidayConfiguration({ dateRange, setPublicHoliday
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700">Select State</label>
-          <Select
-            onValueChange={(value) => {
+        <div className="flex flex-col gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 min-w-[90px]">State</label>
+            <Select
+              onValueChange={(value) => {
                 setSelectedState(value);
                 fetchPublicHolidays();
-            }}
-            defaultValue="AU-NSW"
-          >
-            <SelectTrigger className="w-[250px]">
-              <SelectValue placeholder="Select State" />
-            </SelectTrigger>
-            <SelectContent>
-              {[
-                { value: "AU-ACT", label: "Australian Capital Territory" },
-                { value: "AU-NSW", label: "New South Wales" },
-                { value: "AU-NT", label: "Northern Territory" },
-                { value: "AU-QLD", label: "Queensland" },
-                { value: "AU-SA", label: "South Australia" },
-                { value: "AU-TAS", label: "Tasmania" },
-                { value: "AU-VIC", label: "Victoria" },
-                { value: "AU-WA", label: "Western Australia" },
-              ]
-                .sort((a, b) => a.label.localeCompare(b.label))
-                .map((state) => (
-                  <SelectItem key={state.value} value={state.value}>
-                    {state.label}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {publicHolidays.map((holiday, index) => (
-          <div key={index} className="mb-4 border rounded p-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Holiday Name</label>
-                <Input
-                  type="text"
-                  value={holiday.name}
-                  onChange={(e) => updatePublicHoliday(index, 'name', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Date</label>
-                <Input
-                  type="date"
-                  value={holiday.date}
-                  onChange={(e) => updatePublicHoliday(index, 'date', e.target.value)}
-                  min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
-                  max={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
-                />
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => removePublicHoliday(index)}
+              }}
+              defaultValue="AU-NSW"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Remove
-            </Button>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Select State" />
+              </SelectTrigger>
+              <SelectContent>
+                {[
+                  { value: "AU-ACT", label: "Australian Capital Territory" },
+                  { value: "AU-NSW", label: "New South Wales" },
+                  { value: "AU-NT", label: "Northern Territory" },
+                  { value: "AU-QLD", label: "Queensland" },
+                  { value: "AU-SA", label: "South Australia" },
+                  { value: "AU-TAS", label: "Tasmania" },
+                  { value: "AU-VIC", label: "Victoria" },
+                  { value: "AU-WA", label: "Western Australia" },
+                ]
+                  .sort((a, b) => a.label.localeCompare(b.label))
+                  .map((state) => (
+                    <SelectItem key={state.value} value={state.value}>
+                      {state.label}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
-        ))}
-
-        <Button variant="secondary" onClick={addPublicHoliday}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Public Holiday
-        </Button>
+          {publicHolidays.map((holiday, index) => (
+            <div key={index} className="flex flex-col sm:flex-row items-center gap-2 rounded p-2">
+              <Input
+                type="text"
+                className="py-1 px-2 h-8 text-sm w-48"
+                value={holiday.name}
+                onChange={e => {
+                  const updated = [...publicHolidays];
+                  updated[index] = { ...updated[index], name: e.target.value };
+                  setLocalPublicHolidays(updated);
+                }}
+                onBlur={() => {
+                  if (publicHolidays[index].name !== holiday.name) {
+                    const updated = [...publicHolidays];
+                    updated[index] = { ...updated[index], name: holiday.name };
+                    setPublicHolidays(updated);
+                  }
+                }}
+                placeholder="Holiday Name"
+              />
+              <Input
+                type="date"
+                className="py-1 px-2 h-8 text-sm w-40"
+                value={holiday.date}
+                onChange={(e) => updatePublicHoliday(index, 'date', e.target.value)}
+                min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
+                max={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
+                placeholder="Date"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => removePublicHoliday(index)}
+                aria-label="Remove"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 self-start"
+            onClick={addPublicHoliday}
+            aria-label="Add"
+          >
+            <PlusCircle className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

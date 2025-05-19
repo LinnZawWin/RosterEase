@@ -3,12 +3,11 @@ import { ShiftCategory } from './ShiftCategory';
 
 export type Shift = {
   order: number;
-  shiftCategory: ShiftCategory;
   name: string;
+  shiftCategory: ShiftCategory;
+  days: string[];
   startTime: string;
   endTime: string;
   duration: number;
-  days: string[];
-  staffCategories: StaffCategory[];
   color?: string;
 };
