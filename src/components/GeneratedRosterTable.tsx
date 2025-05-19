@@ -1,3 +1,4 @@
+import { PublicHoliday } from '@/models/PublicHoliday';
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, getDay } from 'date-fns';
 
 type Staff = {
@@ -20,7 +21,7 @@ interface GeneratedRosterTableProps {
   dateRange: { from: Date | null; to: Date | null };
   calendarData: any[];
   shifts: any[];
-  publicHolidays: string[];
+  publicHolidays: PublicHoliday[];
 }
 
 export default function GeneratedRosterTable({
@@ -79,7 +80,7 @@ export default function GeneratedRosterTable({
                       const dayRoster = (calendarData || []).find((d) => d.date === formattedDay);
                       const adjustedDay = (getDay(day) + 6) % 7;
                       const isWeekend = adjustedDay === 5 || adjustedDay === 6;
-                      const isPublicHoliday = publicHolidays.includes(formattedDay);
+                      const isPublicHoliday = publicHolidays.some(ph => ph.date === formattedDay);
                       const weekendBg = "#f5f5f5";
 
                       cells.push(
@@ -97,18 +98,26 @@ export default function GeneratedRosterTable({
                           <div className="font-bold">{format(day, 'd')}</div>
                           {dayRoster && (
                             <div className="text-xs mt-2">
-                              {dayRoster?.shifts?.map((shift: ShiftWithStaff, index: number) => (
-                                <div key={index} className="flex items-center text-gray-600">
-                                  <span
-                                    className="w-2 h-2 rounded-full mr-2"
-                                    style={{
-                                      backgroundColor:
-                                        (shifts.find((s) => s.name === shift.name)?.color) || '#ccc'
-                                    }}
-                                  ></span>
-                                  {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
-                                </div>
-                              ))}
+                              {dayRoster?.shifts
+                                ?.slice() // create a shallow copy
+                                .sort((a: ShiftWithStaff, b: ShiftWithStaff) => {
+                                  // Find the order from the shifts array for each shift
+                                  const orderA = shifts.find((s) => s.name === a.name)?.order ?? 0;
+                                  const orderB = shifts.find((s) => s.name === b.name)?.order ?? 0;
+                                  return orderA - orderB;
+                                })
+                                .map((shift: ShiftWithStaff, index: number) => (
+                                  <div key={index} className="flex items-center text-gray-600">
+                                    <span
+                                      className="w-2 h-2 rounded-full mr-2"
+                                      style={{
+                                        backgroundColor:
+                                          (shifts.find((s) => s.name === shift.name)?.color) || '#ccc'
+                                      }}
+                                    ></span>
+                                    {shift.name}: {shift.staff.map((s: Staff) => s.name).join(', ')}
+                                  </div>
+                                ))}
                             </div>
                           )}
                         </td>

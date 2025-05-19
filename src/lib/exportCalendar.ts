@@ -1,5 +1,6 @@
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import * as XLSXStyle from 'xlsx-js-style';
+import { PublicHoliday } from '@/models/PublicHoliday';
 
 type Staff = {
   name: string;
@@ -28,7 +29,7 @@ export function exportCalendar({
   calendarData: any[];
   staff: Staff[];
   shifts: any[];
-  publicHolidays: string[];
+  publicHolidays: PublicHoliday[];
   dateRange: { from: Date | null; to: Date | null };
 }) {
   if (!calendarData || calendarData.length === 0) {
@@ -122,7 +123,7 @@ export function exportCalendar({
       ...weekDates.map((d, i) => {
         if (!d) return '';
         const dateStr = format(d, 'yyyy-MM-dd');
-        const isPH = publicHolidays.includes(dateStr);
+        const isPH = publicHolidays.some(ph => ph.date === dateStr);
         const label = `${getOrdinal(d.getDate())}${isPH ? ' (PH)' : ''}`;
         return label;
       })
@@ -134,7 +135,7 @@ export function exportCalendar({
       const colLetter = String.fromCharCode('B'.charCodeAt(0) + i);
       const rowNum = currentRow; // 1-based index (date number row)
       const dateStr = d ? format(d, 'yyyy-MM-dd') : '';
-      const isPH = d && publicHolidays.includes(dateStr);
+      const isPH = d && publicHolidays.some(ph => ph.date === dateStr);
       cellStyles[`${colLetter}${rowNum}`] = {
         ...(isPH
           ? {

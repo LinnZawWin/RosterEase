@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
-import { useState, useCallback, useId } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import PublicHolidayConfiguration from '@/components/PublicHolidayConfiguration';
 import StaffCategoryConfiguration from '@/components/StaffCategoryConfiguration';
@@ -79,9 +79,9 @@ const defaultConsecutiveShiftAssignmentRules = [
   }
 ];
 const defaultLeaves = [
-  { staff: 'AT-3', from: new Date('2025-05-19'), to: new Date('2025-05-30') },
-  { staff: 'AT-2', from: new Date('2025-06-23'), to: new Date('2025-06-27') },
-  { staff: 'AT-C', from: new Date('2025-07-07'), to: new Date('2025-07-11') },
+  { staff: defaultStaff.find(s => s.name === 'AT-3')!, from: new Date('2025-05-19'), to: new Date('2025-05-30') },
+  { staff: defaultStaff.find(s => s.name === 'AT-2')!, from: new Date('2025-06-23'), to: new Date('2025-06-27') },
+  { staff: defaultStaff.find(s => s.name === 'AT-C')!, from: new Date('2025-07-07'), to: new Date('2025-07-11') },
 ];
 const daysOfWeekOptions = [
   { value: 'Sun', label: 'Sunday' },
@@ -103,12 +103,17 @@ export default function Home() {
   const [calendarData, setCalendarData] = useState<any[]>([]);
   const [fixedShifts, setFixedShifts] = useState<FixedShift[]>(defaultFixedShifts);
   const [shiftExceptions, setShiftExceptions] = useState<ShiftException[]>(defaultShiftExceptions);
-  const [publicHolidays, setPublicHolidaysState] = useState<string[]>([]);
+  const [publicHolidays, setPublicHolidaysState] = useState<PublicHoliday[]>([]);
   const [consecutiveShiftAssignmentRules, setConsecutiveShiftAssignmentRules] = useState<ConsecutiveShiftAssignmentRule[]>(defaultConsecutiveShiftAssignmentRules);
-  const [leaves, setLeaves] = useState(defaultLeaves);
+  const [leaves, setLeaves] = useState<Leave[]>(defaultLeaves);
+  const [minDate, setMinDate] = useState('');
+
+  useEffect(() => {
+    setMinDate(format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
+  }, []);
 
   const setPublicHolidays = useCallback((holidays: { name: string; date: string }[]) => {
-    setPublicHolidaysState(holidays.map((holiday) => holiday.date));
+    setPublicHolidaysState(holidays.map((holiday) => ({ name: holiday.name, date: holiday.date })));
   }, []);
 
   const handleGenerateRoster = async () => {
@@ -161,57 +166,57 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:gap-6">
-            
-                <div className="flex items-center gap-2 w-full justify-center">
-                  <label className="text-sm font-medium text-gray-700 whitespace-nowrap mr-2">Date Range:</label>
-                  <Input
-                    type="date"
-                    className="w-32 px-1 py-1 text-sm"
-                    value={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
-                    onChange={(e) => {
-                      const newFromDate = e.target.value ? new Date(e.target.value) : undefined;
-                      if (newFromDate && newFromDate <= new Date()) {
-                        alert('From date must be later than the current date.');
-                        return;
-                      }
-                      setDateRange((prev) => {
-                        const newToDate = newFromDate
-                          ? new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1)
-                          : null;
-                        return { from: newFromDate || null, to: newToDate };
-                      });
-                    }}
-                    min={format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd')}
-                  />
-                  <span className="text-gray-400 text-sm px-0">–</span>
-                  <Input
-                    type="date"
-                    className="w-32 px-1 py-1 text-sm"
-                    value={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
-                    onChange={(e) => {
-                      const newToDate = e.target.value ? new Date(e.target.value) : undefined;
-                      if (newToDate && dateRange.from && newToDate <= dateRange.from) {
-                        alert('To date must be later than the From date.');
-                        return;
-                      }
-                      setDateRange((prev) => ({ ...prev, to: newToDate || null }));
-                    }}
-                    min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd')}
-                  />
-                </div>
-                {/* Auto-set date range if not set */}
-                {(() => {
-                  const today = new Date();
-                  const firstDayOfNextMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                  if (!dateRange.from) {
-                    const newFromDate = firstDayOfNextMonth;
-                    setDateRange((prev) => {
-                      const newToDate = new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1);
-                      return { from: newFromDate, to: newToDate };
-                    });
+
+            <div className="flex items-center gap-2 w-full justify-center">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap mr-2">Date Range:</label>
+              <Input
+                type="date"
+                className="w-32 px-1 py-1 text-sm"
+                value={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
+                onChange={(e) => {
+                  const newFromDate = e.target.value ? new Date(e.target.value) : undefined;
+                  if (newFromDate && newFromDate <= new Date()) {
+                    alert('From date must be later than the current date.');
+                    return;
                   }
-                  return null;
-                })()}
+                  setDateRange((prev) => {
+                    const newToDate = newFromDate
+                      ? new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1)
+                      : null;
+                    return { from: newFromDate || null, to: newToDate };
+                  });
+                }}
+                min={minDate}
+              />
+              <span className="text-gray-400 text-sm px-0">–</span>
+              <Input
+                type="date"
+                className="w-32 px-1 py-1 text-sm"
+                value={dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
+                onChange={(e) => {
+                  const newToDate = e.target.value ? new Date(e.target.value) : undefined;
+                  if (newToDate && dateRange.from && newToDate <= dateRange.from) {
+                    alert('To date must be later than the From date.');
+                    return;
+                  }
+                  setDateRange((prev) => ({ ...prev, to: newToDate || null }));
+                }}
+                min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : minDate}
+              />
+            </div>
+            {/* Auto-set date range if not set */}
+            {(() => {
+              const today = new Date();
+              const firstDayOfNextMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+              if (!dateRange.from) {
+                const newFromDate = firstDayOfNextMonth;
+                setDateRange((prev) => {
+                  const newToDate = new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1);
+                  return { from: newFromDate, to: newToDate };
+                });
+              }
+              return null;
+            })()}
             <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center">
               <Button
                 variant="secondary"

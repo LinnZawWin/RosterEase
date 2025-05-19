@@ -1,4 +1,3 @@
-import { StaffCategory } from './StaffCategory';
 import { ShiftCategory } from './ShiftCategory';
 
 export type Shift = {

@@ -1,11 +1,12 @@
 import { format } from 'date-fns';
 import { ConsecutiveShiftAssignmentRule } from '@/models/ConsecutiveShiftAssignmentRule';
+import { Staff } from '@/models/Staff';
+import { Shift } from '@/models/Shift';
+import { FixedShift } from '@/models/FixedShift';
+import { ShiftException } from '@/models/ShiftException';
+import { Leave } from '@/models/Leave';
+import { PublicHoliday } from '@/models/PublicHoliday';
 
-export type Staff = {
-    name: string;
-    staffCategory: string;
-    fte: number;
-};
 
 export type ShiftWithStaff = {
     name: string;
@@ -18,13 +19,13 @@ export type ShiftWithStaff = {
 };
 
 export type RosterConfig = {
-    shifts: any[];
+    shifts: Shift[];
     staff: Staff[];
     consecutiveShiftAssignmentRules: ConsecutiveShiftAssignmentRule[];
-    fixedShifts: any[];
-    shiftExceptions: any[];
-    publicHolidays: string[];
-    leaves: { staff: string; from: Date; to: Date }[];
+    fixedShifts: FixedShift[];
+    shiftExceptions: ShiftException[];
+    publicHolidays: PublicHoliday[];
+    leaves: Leave[];
 };
 
 export async function generateRoster({
@@ -71,7 +72,7 @@ export async function generateRoster({
         const dateStr = format(currentDate, 'yyyy-MM-dd');
         updateGapDaysTracking(ruleTracking.gap);
 
-        const isPublicHoliday = publicHolidays.includes(dateStr);
+        const isPublicHoliday = publicHolidays.some(ph => ph.date === dateStr);
         const applicableShifts = getApplicableShiftsForDay(
             defaultShifts,
             consecutiveShiftAssignmentRules,
@@ -231,10 +232,10 @@ function getApplicableShiftsForDay(shifts: any[], consecutiveShiftAssignmentRule
 }
 
 function processLeave(
-    shift: any,
-    staff: any[],
+    shift: Shift,
+    staff: Staff[],
     assignedStaff: Set<string>,
-    leaves: { staff: string; from: Date; to: Date }[],
+    leaves: Leave[],
     currentDate: Date
 ) {
     // Only assign Annual Leave if the current date is within a leave period for a staff member
@@ -245,12 +246,9 @@ function processLeave(
     if (!shift.days || !shift.days.includes(dayOfWeek)) return null;
 
     const eligibleStaff = staff.filter(
-        (s) =>
-            shift.categories?.includes(s.staffCategory) &&
-            !assignedStaff.has(s.name) &&
-            leaves.some(
+        (s) => leaves.some(
                 (leave) =>
-                    leave.staff === s.name &&
+                    leave.staff === s &&
                     leave.from <= currentDate &&
                     leave.to >= currentDate
             )
@@ -563,3 +561,37 @@ function updateShiftCountTracker(shiftCountTracker: any, staff: any, shift: any)
         shiftCountTracker[staff.name][shift.name]++;
     }
 }
+
+// New function to handle roster generation from the UI
+export const handleGenerateRoster = async (
+  dateRange: { from: Date | null; to: Date | null },
+  shifts: Shift[],
+  staff: Staff[],
+  consecutiveShiftAssignmentRules: ConsecutiveShiftAssignmentRule[],
+  fixedShifts: FixedShift[],
+  shiftExceptions: ShiftException[],
+  publicHolidays: PublicHoliday[],
+  leaves: Leave[],
+  setCalendarData: (data: any) => void
+) => {
+  if (dateRange.from && dateRange.to) {
+    const startDate = format(dateRange.from, 'yyyy-MM-dd');
+    const endDate = format(dateRange.to, 'yyyy-MM-dd');
+    const roster = await generateRoster({
+      startDate,
+      endDate,
+      config: {
+        shifts,
+        staff,
+        consecutiveShiftAssignmentRules, // model objects
+        fixedShifts,
+        shiftExceptions,
+        publicHolidays, // model objects
+        leaves, // model objects
+      },
+    });
+    setCalendarData(roster.calendarData);
+  } else {
+    alert('Please select a valid date range.');
+  }
+};
