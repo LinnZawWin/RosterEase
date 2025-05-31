@@ -7,13 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import dynamic from 'next/dynamic';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import { ConsecutiveShiftAssignmentRule } from '@/models/ConsecutiveShiftAssignmentRule';
+import { Shift } from '@/models/Shift';
+import { Staff } from '@/models/Staff';
 
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
 
 interface ConsecutiveRuleConfigurationProps {
   consecutiveShiftAssignmentRules: ConsecutiveShiftAssignmentRule[];
-  shifts: { name: string }[];
-  staff: { name: string }[];
+  shifts: Shift[];
+  staff: Staff[];
   setConsecutiveShiftAssignmentRules: (rules: ConsecutiveShiftAssignmentRule[]) => void;
 }
 
@@ -85,14 +87,12 @@ export default function ConsecutiveRuleConfiguration({
                   <ReactSelect
                     isMulti
                     options={shifts.map((shift) => ({ value: shift.name, label: shift.name }))}
-                    value={rule.shifts.map((shift) => ({ value: shift, label: shift }))}
-                    onChange={(newValue) =>
-                      handleLocalChange(
-                        index,
-                        'shifts',
-                        Array.isArray(newValue) ? newValue.map((v) => v.value) : []
-                      )
-                    }
+                    value={rule.shifts.map((shift) => ({ value: shift.name, label: shift.name }))}
+                    onChange={(newValue) => {
+                      const selectedNames = Array.isArray(newValue) ? newValue.map((v: any) => v.value) : [];
+                      const selectedShifts = shifts.filter((s) => selectedNames.includes(s.name));
+                      handleLocalChange(index, 'shifts', selectedShifts);
+                    }}
                     placeholder="Shifts"
                     classNamePrefix="react-select"
                     styles={{
@@ -131,14 +131,12 @@ export default function ConsecutiveRuleConfiguration({
                   <ReactSelect
                     isMulti
                     options={staff.map((s) => ({ value: s.name, label: s.name }))}
-                    value={rule.staffMembers.map((s) => ({ value: s, label: s }))}
-                    onChange={(newValue) =>
-                      handleLocalChange(
-                        index,
-                        'staffMembers',
-                        Array.isArray(newValue) ? newValue.map((v) => v.value) : []
-                      )
-                    }
+                    value={rule.staffMembers.map((s) => ({ value: s.name, label: s.name }))}
+                    onChange={(newValue) => {
+                      const selectedNames = Array.isArray(newValue) ? newValue.map((v: any) => v.value) : [];
+                      const selectedStaff = staff.filter((s) => selectedNames.includes(s.name));
+                      handleLocalChange(index, 'staffMembers', selectedStaff);
+                    }}
                     placeholder="Staff"
                     classNamePrefix="react-select"
                     styles={{

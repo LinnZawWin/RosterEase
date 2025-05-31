@@ -1,3 +1,4 @@
+import { PublicHoliday } from '@/models/PublicHoliday';
 import { format } from 'date-fns';
 
 type Staff = {
@@ -21,6 +22,7 @@ interface DataVerificationProps {
   staff: Staff[];
   shifts: any[];
   calendarData: any[];
+  publicHolidays: PublicHoliday[]; // <-- Add this line
 }
 
 export default function DataVerification({
@@ -28,6 +30,7 @@ export default function DataVerification({
   staff,
   shifts,
   calendarData,
+  publicHolidays, // <-- Accept as prop
 }: DataVerificationProps) {
   return (
     <>
@@ -56,7 +59,7 @@ export default function DataVerification({
                   </thead>
                   <tbody>
                     {(() => {
-                      const rows = [];
+                      const rows: React.ReactNode[] = [];
                       let currentDate = new Date(dateRange.from);
                       const accumulatedHours: { [key: string]: number } = {};
 
@@ -175,6 +178,95 @@ export default function DataVerification({
               </div>
             ) : (
               <p className="text-gray-500">No shift assignments available. Please generate a roster to view the data.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Weekly Shift Assignments Summary */}
+      <div className="mt-8">
+        <div className="border rounded shadow-sm">
+          <div className="border-b px-4 py-2 bg-gray-50">
+            <h2 className="text-lg font-semibold">Weekly Shift Assignments</h2>
+            <p className="text-sm text-gray-600">
+              View the number of shifts assigned for each shift type, grouped by week (Monday to Sunday).
+            </p>
+          </div>
+          <div className="p-4">
+            {calendarData.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="table-auto border-collapse border border-gray-300 w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border border-gray-300 p-2 bg-gray-100">Week</th>
+                      {shifts.map((shift) => (
+                        <th key={shift.name} className="border border-gray-300 p-2 bg-gray-100">
+                          {shift.name}
+                        </th>
+                      ))}
+                      <th className="border border-gray-300 p-2 bg-gray-100">Public Holidays</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      // Group calendarData by week (Monday to Sunday)
+                      const weeks: { [weekKey: string]: any[] } = {};
+                      calendarData.forEach((day) => {
+                        const dateObj = new Date(day.date);
+                        // Get Monday of the current week
+                        const dayOfWeek = dateObj.getDay();
+                        const monday = new Date(dateObj);
+                        monday.setDate(dateObj.getDate() - ((dayOfWeek + 6) % 7));
+                        const sunday = new Date(monday);
+                        sunday.setDate(monday.getDate() + 6);
+                        const weekKey = `${format(monday, 'yyyy-MM-dd')} to ${format(sunday, 'yyyy-MM-dd')}`;
+                        if (!weeks[weekKey]) weeks[weekKey] = [];
+                        weeks[weekKey].push(day);
+                      });
+
+                      // For each week, count shifts by type and public holidays
+                      const rows: React.ReactNode[] = [];
+                      Object.entries(weeks).forEach(([weekKey, days]) => {
+                        const shiftCounts: { [key: string]: number } = {};
+                        shifts.forEach((shift) => {
+                          shiftCounts[shift.name] = 0;
+                        });
+                        days.forEach((dayRoster) => {
+                          dayRoster?.shifts?.forEach((shift: ShiftWithStaff) => {
+                            if (shiftCounts.hasOwnProperty(shift.name)) {
+                              shiftCounts[shift.name]++;
+                            }
+                          });
+                        });
+
+                        // Count public holidays in this week
+                        const [weekStartStr, weekEndStr] = weekKey.split(' to ');
+                        const weekStart = new Date(weekStartStr);
+                        const weekEnd = new Date(weekEndStr);
+                        const publicHolidayCount = publicHolidays.filter(ph => {
+                          const phDate = new Date(ph.date);
+                          return phDate >= weekStart && phDate <= weekEnd;
+                        }).length;
+
+                        rows.push(
+                          <tr key={weekKey}>
+                            <td className="border border-gray-300 p-2">{weekKey}</td>
+                            {shifts.map((shift) => (
+                              <td key={shift.name} className="border border-gray-300 p-2 text-center">
+                                {shiftCounts[shift.name]}
+                              </td>
+                            ))}
+                            <td className="border border-gray-300 p-2 text-center">{publicHolidayCount}</td>
+                          </tr>
+                        );
+                      });
+                      return rows;
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-gray-500">No weekly shift assignments available. Please generate a roster to view the data.</p>
             )}
           </div>
         </div>

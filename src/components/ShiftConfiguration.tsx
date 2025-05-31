@@ -7,30 +7,34 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-
 const ReactSelect = dynamic(() => import('react-select'), { ssr: false });
+
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2).toString().padStart(2, '0');
   const minute = (i % 2 === 0) ? '00' : '30';
   return `${hour}:${minute}`;
 });
 
+import type { Dispatch, SetStateAction } from 'react';
+import { ShiftCategory } from '@/models/ShiftCategory';
+import { StaffCategory } from '@/models/StaffCategory';
+
 interface Shift {
   order: number;
   name: string;
-  shiftCategory: string;
+  shiftCategory: ShiftCategory;
   startTime: string;
   endTime: string;
   duration: number;
   days: string[];
+  staffCategories: StaffCategory[]; // <-- ensure not optional and correct type
   color?: string;
 }
 
-import type { Dispatch, SetStateAction } from 'react';
-
 interface ShiftConfigurationProps {
   shifts: Shift[];
-  shiftCategories: string[];
+  shiftCategories: ShiftCategory[];
+  staffCategoriesList: StaffCategory[]; // <-- add this
   daysOfWeekOptions: { label: string; value: string }[]; // <-- Accept from parent
   setShifts: Dispatch<SetStateAction<Shift[]>>;
 }
@@ -40,6 +44,7 @@ export default function ShiftConfiguration({
   shiftCategories,
   setShifts,
   daysOfWeekOptions, // <-- Use from props
+  staffCategoriesList, // <-- Receive from props
 }: ShiftConfigurationProps) {
   // Local state for all editable fields per shift
   const [localShifts, setLocalShifts] = useState<Shift[]>(shifts);
@@ -89,6 +94,7 @@ export default function ShiftConfiguration({
         endTime: '',
         duration: 0,
         days: [],
+        staffCategories: [],
         color: '#FFFFFF',
       },
     ]);
@@ -108,12 +114,18 @@ export default function ShiftConfiguration({
     addShift();
   }
 
+  // Add this for staff category options
+  const staffCategoryOptions = staffCategoriesList.map(cat => ({
+    value: cat,
+    label: cat,
+  }));
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Shift Configuration</CardTitle>
         <CardDescription>
-          Configure the details of each shift, including its category, applicable days of the week, start and end times, duration, and the colour to display in the calendar and exported Excel file.
+          Configure the details of each shift, including its category, applicable staff categories, days of the week, start and end times, duration, and the colour to display in the calendar and exported Excel file.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -152,6 +164,45 @@ export default function ShiftConfiguration({
                     ))}
                 </SelectContent>
               </Select>
+              {/* --- Staff Category MultiSelect --- */}
+                <div className="min-w-[210px]" style={{ width: 210, maxWidth: 210 }}>
+                <ReactSelect
+                  isMulti
+                  options={staffCategoryOptions}
+                  value={staffCategoryOptions.filter(opt => shift.staffCategories?.includes(opt.value))}
+                  onChange={(selectedOptions) => {
+                  handleLocalChange(
+                    index,
+                    'staffCategories',
+                    Array.isArray(selectedOptions) ? selectedOptions.map(opt => opt.value) : []
+                  );
+                  }}
+                  onBlur={() => handleBlur(index, 'staffCategories')}
+                  placeholder="Staff Categories"
+                  classNamePrefix="react-select"
+                  styles={{
+                  container: (base) => ({
+                    ...base,
+                    width: 220,
+                    minWidth: 220,
+                    maxWidth: 220,
+                  }),
+                  control: (base) => ({
+                    ...base,
+                    minHeight: '32px',
+                    height: '32px',
+                    fontSize: '0.875rem',
+                  }),
+                  valueContainer: (base) => ({
+                    ...base,
+                    padding: '0 6px',
+                  }),
+                  }}
+                  menuPlacement="auto"
+                  isClearable={false}
+                />
+                </div>
+              {/* --- End Staff Category MultiSelect --- */}
               <div className="min-w-[120px]">
                 <ReactSelect
                   isMulti
@@ -170,7 +221,7 @@ export default function ShiftConfiguration({
                   styles={{
                     container: (base) => ({
                       ...base,
-                      width: 470, // Set fixed width to 470px
+                      width: 470,
                       minWidth: 470,
                       maxWidth: 470,
                     }),

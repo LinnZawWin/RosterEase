@@ -1,4 +1,4 @@
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
+import { format } from 'date-fns';
 import * as XLSXStyle from 'xlsx-js-style';
 import { PublicHoliday } from '@/models/PublicHoliday';
 
@@ -37,26 +37,36 @@ export function exportCalendar({
     return;
   }
 
-  // Prepare data for Excel (similar to your CSV logic)
-  const weeks: { [key: string]: any[] } = {};
-  calendarData.forEach((dayRoster) => {
-    const date = new Date(dayRoster.date);
-    const monday = new Date(date);
-    const day = monday.getDay();
-    monday.setDate(monday.getDate() - ((day + 6) % 7));
-    const weekKey = format(monday, 'yyyy-MM-dd');
-    if (!weeks[weekKey]) weeks[weekKey] = [];
-    weeks[weekKey].push(dayRoster);
-  });
+  // Group days into fortnights (blocks of 14 days, starting from the first Monday)
+  const sortedDays = [...calendarData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const fortnights: any[][] = [];
+  let block: any[] = [];
+  let blockStartDate: Date | null = null;
 
-  const sortedWeekKeys = Object.keys(weeks).sort();
+  sortedDays.forEach((day) => {
+    const dateObj = new Date(day.date);
+    if (!blockStartDate) {
+      // Start block on first Monday
+      if (dateObj.getDay() === 1) {
+        blockStartDate = dateObj;
+        block = [day];
+      }
+    } else {
+      block.push(day);
+      if (block.length === 14) {
+        fortnights.push(block);
+        block = [];
+        blockStartDate = null;
+      }
+    }
+  });
+  // Push last block if not empty
+  if (block.length > 0) fortnights.push(block);
+
+  // Prepare Excel rows for each pair of fortnights (side by side)
   const excelRows: any[][] = [];
   const cellStyles: { [cell: string]: any } = {};
   const cellTypes: { [cell: string]: any } = {};
-
-  // Track the start and end row for each week block
-  let currentRow = 0;
-  const weekBlocks: { start: number; end: number }[] = [];
 
   // Helper to get ordinal suffix for a date
   function getOrdinal(n: number) {
@@ -65,107 +75,139 @@ export function exportCalendar({
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
-  sortedWeekKeys.forEach((weekKey, weekIdx) => {
-    const weekDays = weeks[weekKey]
-      .map((d) => new Date(d.date))
-      .sort((a, b) => a.getTime() - b.getTime());
-
-    const weekDates: (Date | null)[] = [];
-    const monday = new Date(weekKey);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const found = weekDays.find((wd) => format(wd, 'yyyy-MM-dd') === format(d, 'yyyy-MM-dd'));
-      weekDates.push(found ? d : null);
+  // Helper to get Excel column letter
+  function colLetter(idx: number) {
+    let s = '';
+    while (idx >= 0) {
+      s = String.fromCharCode((idx % 26) + 65) + s;
+      idx = Math.floor(idx / 26) - 1;
     }
+    return s;
+  }
 
-    // For the very first block, set the previous month if the 1st is not Monday
-    let monthYear = weekDates[0] ? format(weekDates[0], 'MMM-yy') : '';
-    if (weekIdx === 0 && weekDates.some(d => d && d.getDate() === 1 && d.getDay() !== 1)) {
-      // Find the first date in the week that is the 1st
-      const firstOfMonth = weekDates.find(d => d && d.getDate() === 1);
-      if (firstOfMonth) {
-        const prevMonth = new Date(firstOfMonth);
-        prevMonth.setMonth(prevMonth.getMonth() - 1);
-        monthYear = format(prevMonth, 'MMM-yy');
+  // Each row block: header, date row, staff rows, empty row
+  for (let pairIdx = 0; pairIdx < fortnights.length; pairIdx += 2) {
+    const leftBlock = fortnights[pairIdx];
+    const rightBlock = fortnights[pairIdx + 1];
+
+    // --- HEADER ROW ---
+    const leftStart = leftBlock && leftBlock[0] ? new Date(leftBlock[0].date) : null;
+    const rightStart = rightBlock && rightBlock[0] ? new Date(rightBlock[0].date) : null;
+    const leftMonth = leftStart ? format(leftStart, 'MMM-yy') : '';
+    const rightMonth = rightStart ? format(rightStart, 'MMM-yy') : '';
+
+    // Header: [Month, Mon, Tue, ..., Sun] x2 + Total Hours
+    const headerRow = [
+      leftMonth, 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+      '', // spacer
+      rightMonth, 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+      'Total Hours'
+    ];
+    excelRows.push(headerRow);
+
+    // Style header
+    headerRow.forEach((_, i) => {
+      const col = colLetter(i);
+      const row = excelRows.length;
+      cellStyles[`${col}${row}`] = {
+        font: { bold: true },
+        alignment: { horizontal: "center", vertical: "center" },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        }
+      };
+    });
+
+    // --- DATE ROW ---
+    const leftDates: (Date | null)[] = [];
+    if (leftBlock) {
+      const monday = leftBlock[0] ? new Date(leftBlock[0].date) : null;
+      if (monday) {
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(monday.getDate() + i);
+          leftDates.push(d);
+        }
+      }
+    }
+    const rightDates: (Date | null)[] = [];
+    if (rightBlock) {
+      const monday = rightBlock[0] ? new Date(rightBlock[0].date) : null;
+      if (monday) {
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(monday.getDate() + i);
+          rightDates.push(d);
+        }
       }
     }
 
-    // Track start row for this week block (1-based for Excel)
-    const blockStartRow = currentRow + 1;
-
-    // Add header row with bold and center alignment
-    const headerRow = [
-      monthYear,
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
-    excelRows.push(headerRow);
-    currentRow++;
-
-    // Apply bold and center alignment to header row cells
-    headerRow.forEach((_, i) => {
-      const colLetter = String.fromCharCode('A'.charCodeAt(0) + i);
-      const rowNum = currentRow; // 1-based index
-      cellStyles[`${colLetter}${rowNum}`] = {
-        font: { bold: true },
-        alignment: { horizontal: "center", vertical: "center" }
-      };
-    });
-    // Add date number row (with PH marking and yellow background if public holiday)
-    excelRows.push([
+    const dateRow = [
       '',
-      ...weekDates.map((d, i) => {
+      ...leftDates.map((d) => {
         if (!d) return '';
         const dateStr = format(d, 'yyyy-MM-dd');
         const isPH = publicHolidays.some(ph => ph.date === dateStr);
-        const label = `${getOrdinal(d.getDate())}${isPH ? ' (PH)' : ''}`;
-        return label;
-      })
-    ]);
-    currentRow++;
+        return `${getOrdinal(d.getDate())}${isPH ? ' (PH)' : ''}`;
+      }),
+      '',
+      ...rightDates.map((d) => {
+        if (!d) return '';
+        const dateStr = format(d, 'yyyy-MM-dd');
+        const isPH = publicHolidays.some(ph => ph.date === dateStr);
+        return `${getOrdinal(d.getDate())}${isPH ? ' (PH)' : ''}`;
+      }),
+      ''
+    ];
+    excelRows.push(dateRow);
 
-    // Apply bold+italic and center alignment to date number row cells
-    weekDates.forEach((d, i) => {
-      const colLetter = String.fromCharCode('B'.charCodeAt(0) + i);
-      const rowNum = currentRow; // 1-based index (date number row)
-      const dateStr = d ? format(d, 'yyyy-MM-dd') : '';
-      const isPH = d && publicHolidays.some(ph => ph.date === dateStr);
-      cellStyles[`${colLetter}${rowNum}`] = {
-        ...(isPH
-          ? {
-              fill: {
-                patternType: "solid",
-                fgColor: { rgb: "FFF9C4" } // light yellow
-              },
-              font: { bold: true, italic: true },
-              alignment: { horizontal: "center", vertical: "center" }
-            }
-          : {
-              font: { bold: true, italic: true },
-              alignment: { horizontal: "center", vertical: "center" }
-            }
-        )
+    // Style the whole date row as bold and italic, and border each week block
+    dateRow.forEach((_, i) => {
+      const col = colLetter(i);
+      const row = excelRows.length;
+      let border = {};
+      // Border for left week block (columns B-H, i=1-7)
+      if (i >= 1 && i <= 7) {
+        border = {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        };
+      }
+      // Border for right week block (columns J-P, i=9-15)
+      if (i >= 9 && i <= 15) {
+        border = {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        };
+      }
+      cellStyles[`${col}${row}`] = {
+        font: { bold: true, italic: true },
+        alignment: { horizontal: "center", vertical: "center" },
+        ...border
       };
     });
 
-    staff.forEach((s, staffIdx) => {
+    // --- STAFF ROWS ---
+    staff.forEach((s) => {
+      let totalHours = 0;
       const row: (string | number)[] = [];
       row.push(s.name);
+
+      // Left block (Mon-Sun)
       for (let i = 0; i < 7; i++) {
-        const d = weekDates[i];
+        const d = leftDates[i];
         if (!d) {
           row.push('');
           continue;
         }
-        const dayRoster = calendarData.find(
-          (r) => r.date === format(d, 'yyyy-MM-dd')
-        );
+        const dayRoster = leftBlock?.find((r) => r.date === format(d, 'yyyy-MM-dd'));
         if (!dayRoster) {
           row.push('');
           continue;
@@ -176,97 +218,133 @@ export function exportCalendar({
         if (shiftsForStaff.length === 0) {
           row.push('');
         } else {
-          // Only show the duration (not shift type), and set cell color
           const shift = shiftsForStaff[0];
-          row.push(shift.duration); // Push as number, not string
-          // Use the color property from the shifts config data
+          row.push(shift.duration);
+          totalHours += shift.duration;
+          // Color
           const shiftConfig = shifts.find((sh) => sh.name === shift.name);
           let fillColor = '';
           if (shiftConfig && shiftConfig.color) {
-            // Remove leading # if present and convert to uppercase for Excel
             fillColor = shiftConfig.color.replace('#', '').toUpperCase();
           }
-          // Excel cell address: e.g. B3, C3, etc.
-          const colLetter = String.fromCharCode('B'.charCodeAt(0) + i);
-          const rowNum = currentRow + 1;
+          const col = colLetter(1 + i);
+          const rowNum = excelRows.length + 1;
           if (fillColor) {
-            cellStyles[`${colLetter}${rowNum}`] = {
+            cellStyles[`${col}${rowNum}`] = {
               fill: {
                 patternType: "solid",
                 fgColor: { rgb: fillColor }
+              },
+              border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
+              }
+            };
+          } else {
+            cellStyles[`${col}${rowNum}`] = {
+              border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
               }
             };
           }
-          // Set cell type to number for aggregation
-          cellTypes[`${colLetter}${rowNum}`] = { t: 'n' };
+          cellTypes[`${col}${rowNum}`] = { t: 'n' };
         }
       }
+
+      row.push(''); // spacer
+
+      // Right block (Mon-Sun)
+      for (let i = 0; i < 7; i++) {
+        const d = rightDates[i];
+        if (!d) {
+          row.push('');
+          continue;
+        }
+        const dayRoster = rightBlock?.find((r) => r.date === format(d, 'yyyy-MM-dd'));
+        if (!dayRoster) {
+          row.push('');
+          continue;
+        }
+        const shiftsForStaff = (dayRoster.shifts || []).filter((shift: ShiftWithStaff) =>
+          shift.staff.some((st: Staff) => st.name === s.name)
+        );
+        if (shiftsForStaff.length === 0) {
+          row.push('');
+        } else {
+          const shift = shiftsForStaff[0];
+          row.push(shift.duration);
+          totalHours += shift.duration;
+          // Color
+          const shiftConfig = shifts.find((sh) => sh.name === shift.name);
+          let fillColor = '';
+          if (shiftConfig && shiftConfig.color) {
+            fillColor = shiftConfig.color.replace('#', '').toUpperCase();
+          }
+          const col = colLetter(9 + i);
+          const rowNum = excelRows.length + 1;
+          if (fillColor) {
+            cellStyles[`${col}${rowNum}`] = {
+              fill: {
+                patternType: "solid",
+                fgColor: { rgb: fillColor }
+              },
+              border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
+              }
+            };
+          } else {
+            cellStyles[`${col}${rowNum}`] = {
+              border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
+              }
+            };
+          }
+          cellTypes[`${col}${rowNum}`] = { t: 'n' };
+        }
+      }
+
+      // Total hours column (column R, index 16)
+      row.push(totalHours);
+
+      // Style total hours column
+      const totalCol = colLetter(16);
+      const rowNum = excelRows.length + 1;
+      cellStyles[`${totalCol}${rowNum}`] = {
+        font: { bold: true },
+        alignment: { horizontal: "center", vertical: "center" },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        }
+      };
+      cellTypes[`${totalCol}${rowNum}`] = { t: 'n' };
+
       excelRows.push(row);
-      currentRow++;
     });
 
-    excelRows.push(['']);
-    currentRow++;
-
-    // Track end row for this week block (exclude the empty row)
-    weekBlocks.push({ start: blockStartRow, end: currentRow - 1 });
-  });
-
-  // Apply thick outside border for each week block
-  weekBlocks.forEach(({ start, end }) => {
-    // Columns A-H (0-7)
-    for (let colIdx = 0; colIdx <= 7; colIdx++) {
-      const colLetter = String.fromCharCode('A'.charCodeAt(0) + colIdx);
-
-      // Top border
-      const topCell = `${colLetter}${start}`;
-      cellStyles[topCell] = {
-        ...cellStyles[topCell],
-        border: {
-          ...(cellStyles[topCell]?.border || {}),
-          top: { style: "thick", color: { rgb: "000000" } }
-        }
-      };
-
-      // Bottom border
-      const bottomCell = `${colLetter}${end}`;
-      cellStyles[bottomCell] = {
-        ...cellStyles[bottomCell],
-        border: {
-          ...(cellStyles[bottomCell]?.border || {}),
-          bottom: { style: "thick", color: { rgb: "000000" } }
-        }
-      };
-    }
-    // Left and right borders for all rows in block
-    for (let row = start; row <= end; row++) {
-      // Left border (A)
-      const leftCell = `A${row}`;
-      cellStyles[leftCell] = {
-        ...cellStyles[leftCell],
-        border: {
-          ...(cellStyles[leftCell]?.border || {}),
-          left: { style: "thick", color: { rgb: "000000" } }
-        }
-      };
-      // Right border (H)
-      const rightCell = `H${row}`;
-      cellStyles[rightCell] = {
-        ...cellStyles[rightCell],
-        border: {
-          ...(cellStyles[rightCell]?.border || {}),
-          right: { style: "thick", color: { rgb: "000000" } }
-        }
-      };
-    }
-  });
+    // Add empty row after each block
+    excelRows.push([]);
+  }
 
   // Create worksheet and workbook using xlsx-js-style
   const ws = XLSXStyle.utils.aoa_to_sheet(excelRows);
 
   // Apply cell styles for shift colors and borders
   Object.entries(cellStyles).forEach(([cell, style]) => {
-    if (!ws[cell]) ws[cell] = { t: 'n', v: 0 }; // Default to number type
+    if (!ws[cell]) ws[cell] = { t: 'n', v: 0 };
     ws[cell].s = style;
   });
 
@@ -274,7 +352,6 @@ export function exportCalendar({
   Object.entries(cellTypes).forEach(([cell, typeObj]) => {
     if (ws[cell]) {
       ws[cell].t = 'n';
-      // If value is string, try to convert to number
       if (typeof ws[cell].v === 'string') {
         const num = Number(ws[cell].v);
         if (!isNaN(num)) ws[cell].v = num;
@@ -289,5 +366,5 @@ export function exportCalendar({
   const fromDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : 'unknown';
   const toDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : 'unknown';
   const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
-  XLSXStyle.writeFile(wb, `Roster_Weekly_${fromDate}_to_${toDate}_${timestamp}.xlsx`);
+  XLSXStyle.writeFile(wb, `Roster_Fortnightly_${fromDate}_to_${toDate}_${timestamp}.xlsx`);
 }

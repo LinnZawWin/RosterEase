@@ -1,7 +1,10 @@
+import { Shift } from "./Shift";
+import { Staff } from "./Staff";
+
 export type ConsecutiveShiftAssignmentRule = {
   type: 'Shift' | 'Staff';
-  shifts: string[];
-  staffMembers: string[];
+  shifts: Shift[];
+  staffMembers: Staff[];
   consecutiveDays: number;
   gapDays: number;
 };

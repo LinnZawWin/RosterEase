@@ -28,8 +28,8 @@ import { exportCalendar } from '@/lib/exportCalendar';
 import GeneratedRosterTable from '@/components/GeneratedRosterTable';
 import DataVerification from '@/components/DataVerification';
 
-const defaultStaffCategories = ['AT', 'AT-C', 'BT'];
-const defaultStaff = [
+const defaultStaffCategories: StaffCategory[] = ['AT', 'AT-C', 'BT'];
+const defaultStaff: Staff[] = [
   { name: 'AT-1', staffCategory: 'AT', fte: 1 },
   { name: 'AT-2', staffCategory: 'AT', fte: 1 },
   { name: 'AT-3', staffCategory: 'AT', fte: 1 },
@@ -38,34 +38,107 @@ const defaultStaff = [
   { name: 'BT-2', staffCategory: 'BT', fte: 0.5 },
   { name: 'BT-3', staffCategory: 'BT', fte: 0.5 },
 ];
-const defaultShiftCategories = ['Day', 'Evening', 'Night', 'Clinic', 'Leave'];
-const defaultShifts = [
-  { order: 1, shiftCategory: 'Day', name: 'Regular day', startTime: '08:00', endTime: '16:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], color: '#DDEBF7' },
-  { order: 2, shiftCategory: 'Evening', name: 'Evening', startTime: '14:00', endTime: '22:00', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], color: '#C6E0B4' },
-  { order: 3, shiftCategory: 'Night', name: 'Night', startTime: '21:30', endTime: '08:30', duration: 11, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], color: '#FCE4D6' },
-  { order: 4, shiftCategory: 'Clinic', name: 'Clinic', startTime: '08:00', endTime: '16:30', duration: 8.5, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-  { order: 5, shiftCategory: 'Day', name: 'Day (Weekend)', startTime: '08:00', endTime: '20:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], color: '#DDEBF7' },
-  { order: 6, shiftCategory: 'Night', name: 'Night (Weekend)', startTime: '20:00', endTime: '08:30', duration: 12.5, days: ['Sat', 'Sun', 'PH'], color: '#FCE4D6' },
-  { order: 7, shiftCategory: 'Leave', name: 'Annual Leave', startTime: '00:00', endTime: '23:30', duration: 8, days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], color: '#B34CAF' },
+const defaultShiftCategories: ShiftCategory[] = ['Day', 'Evening', 'Night', 'Clinic', 'Leave'];
+const defaultShifts: Shift[] = [
+  {
+    order: 1,
+    shiftCategory: 'Day',
+    name: 'Regular day',
+    startTime: '08:00',
+    endTime: '16:00',
+    duration: 8,
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    staffCategories: ['AT', 'AT-C', 'BT'] as StaffCategory[],
+    color: '#DDEBF7',
+  },
+  {
+    order: 2,
+    shiftCategory: 'Evening',
+    name: 'Evening',
+    startTime: '14:00',
+    endTime: '22:00',
+    duration: 8,
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    staffCategories: ['AT', 'AT-C', 'BT'] as StaffCategory[],
+    color: '#C6E0B4',
+  },
+  {
+    order: 3,
+    shiftCategory: 'Night',
+    name: 'Night',
+    startTime: '21:30',
+    endTime: '08:30',
+    duration: 11,
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    staffCategories: ['AT', 'AT-C', 'BT'] as StaffCategory[],
+    color: '#FCE4D6',
+  },
+  {
+    order: 4,
+    shiftCategory: 'Clinic',
+    name: 'Clinic',
+    startTime: '08:00',
+    endTime: '16:30',
+    duration: 8.5,
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    staffCategories: ['AT', 'AT-C'] as StaffCategory[],
+    color: '#FFFFFF',
+  },
+  {
+    order: 5,
+    shiftCategory: 'Day',
+    name: 'Day (Weekend)',
+    startTime: '08:00',
+    endTime: '20:30',
+    duration: 12.5,
+    days: ['Sat', 'Sun', 'PH'],
+    staffCategories: ['AT', 'AT-C', 'BT'] as StaffCategory[],
+    color: '#DDEBF7',
+  },
+  {
+    order: 6,
+    shiftCategory: 'Night',
+    name: 'Night (Weekend)',
+    startTime: '20:00',
+    endTime: '08:30',
+    duration: 12.5,
+    days: ['Sat', 'Sun', 'PH'],
+    staffCategories: ['AT', 'AT-C', 'BT'] as StaffCategory[],
+    color: '#FCE4D6',
+  },
+  {
+    order: 7,
+    shiftCategory: 'Leave',
+    name: 'Annual Leave',
+    startTime: '00:00',
+    endTime: '23:30',
+    duration: 8,
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    staffCategories: ['AT', 'AT-C', 'BT'] as StaffCategory[],
+    color: '#B34CAF',
+  },
 ];
-const defaultFixedShifts = [
+const defaultFixedShifts: FixedShift[] = [
   {
     staff: defaultStaff.find(s => s.name === 'AT-C')!,
     shift: defaultShifts.find(shift => shift.name === 'Clinic')!,
     days: ['Mon', 'Wed', 'Thu'],
   },
 ];
-const defaultShiftExceptions = [
+const defaultShiftExceptions: ShiftException[] = [
   {
     staff: defaultStaff.find(s => s.name === 'AT-C')!,
     shift: defaultShifts.find(shift => shift.name === 'Clinic')!,
     days: ['Tue', 'Fri'],
   },
 ];
-const defaultConsecutiveShiftAssignmentRules = [
+const defaultConsecutiveShiftAssignmentRules: ConsecutiveShiftAssignmentRule[] = [
   {
     type: "Shift" as const,
-    shifts: ['Night', 'Night (Weekend)'],
+    shifts: [
+      defaultShifts.find(shift => shift.name === 'Night')!,
+      defaultShifts.find(shift => shift.name === 'Night (Weekend)')!
+    ],
     staffMembers: [],
     consecutiveDays: 3,
     gapDays: 3,
@@ -73,12 +146,14 @@ const defaultConsecutiveShiftAssignmentRules = [
   {
     type: "Staff" as const,
     shifts: [],
-    staffMembers: ['AT-2'],
+    staffMembers: [
+      defaultStaff.find(staff => staff.name === 'AT-2')!
+    ],
     consecutiveDays: 5,
     gapDays: 5,
   }
 ];
-const defaultLeaves = [
+const defaultLeaves: Leave[] = [
   { staff: defaultStaff.find(s => s.name === 'AT-3')!, from: new Date('2025-05-19'), to: new Date('2025-05-30') },
   { staff: defaultStaff.find(s => s.name === 'AT-2')!, from: new Date('2025-06-23'), to: new Date('2025-06-27') },
   { staff: defaultStaff.find(s => s.name === 'AT-C')!, from: new Date('2025-07-07'), to: new Date('2025-07-11') },
@@ -100,17 +175,44 @@ export default function Home() {
   const [staff, setStaff] = useState<Staff[]>(defaultStaff);
   const [shiftCategories, setShiftCategories] = useState<ShiftCategory[]>(defaultShiftCategories);
   const [shifts, setShifts] = useState<Shift[]>(defaultShifts);
-  const [calendarData, setCalendarData] = useState<any[]>([]);
   const [fixedShifts, setFixedShifts] = useState<FixedShift[]>(defaultFixedShifts);
   const [shiftExceptions, setShiftExceptions] = useState<ShiftException[]>(defaultShiftExceptions);
-  const [publicHolidays, setPublicHolidaysState] = useState<PublicHoliday[]>([]);
   const [consecutiveShiftAssignmentRules, setConsecutiveShiftAssignmentRules] = useState<ConsecutiveShiftAssignmentRule[]>(defaultConsecutiveShiftAssignmentRules);
+  const [publicHolidays, setPublicHolidaysState] = useState<PublicHoliday[]>([]);
   const [leaves, setLeaves] = useState<Leave[]>(defaultLeaves);
+  
   const [minDate, setMinDate] = useState('');
-
+  const [calendarData, setCalendarData] = useState<any[]>([]);
+  
   useEffect(() => {
     setMinDate(format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
   }, []);
+
+  useEffect(() => {
+    if (!dateRange.from) {
+      const today = new Date();
+      // Find the first Monday of next month
+      const firstDayOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      const dayOfWeek = firstDayOfNextMonth.getDay();
+      const daysUntilMonday = (8 - dayOfWeek) % 7;
+      firstDayOfNextMonth.setDate(firstDayOfNextMonth.getDate() + daysUntilMonday);
+      const newFromDate = firstDayOfNextMonth;
+      // Find the last day of the month that is 3 months from newFromDate
+      const lastDayOfTargetMonth = new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, 0);
+      // Start from newFromDate and increment by 14 days (2 weeks) until we pass lastDayOfTargetMonth
+      let blockStart = new Date(newFromDate);
+      let blockEnd = new Date(blockStart);
+      blockEnd.setDate(blockStart.getDate() + 13); // Sunday of the first 2-week block
+      while (blockEnd < lastDayOfTargetMonth) {
+        blockStart = new Date(blockStart);
+        blockStart.setDate(blockStart.getDate() + 14);
+        blockEnd = new Date(blockStart);
+        blockEnd.setDate(blockStart.getDate() + 13);
+      }
+      const newToDate = blockEnd;
+      setDateRange({ from: newFromDate, to: newToDate });
+    }
+  }, [dateRange.from]);
 
   const setPublicHolidays = useCallback((holidays: { name: string; date: string }[]) => {
     setPublicHolidaysState(holidays.map((holiday) => ({ name: holiday.name, date: holiday.date })));
@@ -149,9 +251,86 @@ export default function Home() {
     });
   };
 
-  const handleResetConfiguration = () => {
-    setStaff(defaultStaff);
-    setShifts(defaultShifts);
+  const handleResetConfig = () => {
+    setDateRange({ from: null, to: null });
+    setStaffCategories([]);
+    setStaff([]);
+    setShiftCategories([]);
+    setShifts([]);
+    setFixedShifts([]);
+    setShiftExceptions([]);
+    setConsecutiveShiftAssignmentRules([]);
+    setPublicHolidaysState([]);
+    setLeaves([]);
+  };
+
+  const handleExportConfig = () => {
+    const config = {
+      dateRange,
+      staffCategories,
+      staff,
+      shiftCategories,
+      shifts,
+      fixedShifts,
+      shiftExceptions,
+      consecutiveShiftAssignmentRules,
+      publicHolidays,
+      leaves,
+    };
+    const json = JSON.stringify(config, (key, value) => {
+      // Convert Date objects to ISO strings
+      if (value instanceof Date) {
+      return value.toISOString();
+      }
+      return value;
+    }, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `roster_config_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportConfig = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const config = JSON.parse(text, (key, value) => {
+          // Convert ISO date strings back to Date objects for relevant fields
+          if (
+            (key === 'from' || key === 'to' || key === 'date') &&
+            typeof value === 'string' &&
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(value)
+          ) {
+            return new Date(value);
+          }
+          return value;
+        });
+
+        setDateRange(config.dateRange || { from: null, to: null });
+        setStaffCategories(config.staffCategories || []);
+        setStaff(config.staff || []);
+        setShiftCategories(config.shiftCategories || []);
+        setShifts(config.shifts || []);
+        setFixedShifts(config.fixedShifts || []);
+        setShiftExceptions(config.shiftExceptions || []);
+        setConsecutiveShiftAssignmentRules(config.consecutiveShiftAssignmentRules || []);
+        setPublicHolidaysState(config.publicHolidays || []);
+        setLeaves(config.leaves || []);
+      } catch (err) {
+        alert('Failed to import configuration: ' + (err as Error).message);
+      }
+    };
+    input.click();
   };
 
   // Responsive and mobile-friendly layout
@@ -204,25 +383,12 @@ export default function Home() {
                 min={dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : minDate}
               />
             </div>
-            {/* Auto-set date range if not set */}
-            {(() => {
-              const today = new Date();
-              const firstDayOfNextMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-              if (!dateRange.from) {
-                const newFromDate = firstDayOfNextMonth;
-                setDateRange((prev) => {
-                  const newToDate = new Date(newFromDate.getFullYear(), newFromDate.getMonth() + 3, newFromDate.getDate() - 1);
-                  return { from: newFromDate, to: newToDate };
-                });
-              }
-              return null;
-            })()}
             <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center">
               <Button
                 variant="secondary"
                 size="sm"
                 className="px-3 py-1 text-xs"
-                onClick={() => alert('Import Configuration')}
+                onClick={handleImportConfig}
               >
                 Import Config
               </Button>
@@ -230,7 +396,7 @@ export default function Home() {
                 variant="secondary"
                 size="sm"
                 className="px-3 py-1 text-xs"
-                onClick={() => alert('Export Configuration')}
+                onClick={handleExportConfig}
               >
                 Export Config
               </Button>
@@ -238,7 +404,7 @@ export default function Home() {
                 variant="secondary"
                 size="sm"
                 className="px-3 py-1 text-xs"
-                onClick={handleResetConfiguration}
+                onClick={handleResetConfig}
               >
                 Reset Config
               </Button>
@@ -249,6 +415,7 @@ export default function Home() {
             <ShiftConfiguration
               shifts={shifts}
               shiftCategories={shiftCategories}
+              staffCategoriesList={staffCategories}
               daysOfWeekOptions={daysOfWeekOptions}
               setShifts={setShifts}
             />
@@ -331,6 +498,7 @@ export default function Home() {
           staff={staff}
           shifts={shifts}
           calendarData={calendarData}
+          publicHolidays={publicHolidays}
         />
       </div>
     </div>

@@ -337,13 +337,13 @@ function processConsecutiveShiftAssignmentRuleConsecutiveDays(
         const consecutiveTracking = ruleTracking.consecutive[ruleId];
         const gapTracking = ruleTracking.gap[ruleId];
 
-        // For Shift-based rules, use the same logic as before
+        // For Shift-based rules
         if (ruleType === 'Shift') {
             if (consecutiveTracking.currentStaff && consecutiveTracking.daysRemaining > 0) {
                 const currentStaffMember = staff.find((s: any) => s.name === consecutiveTracking.currentStaff);
                 if (
                     currentStaffMember &&
-                    shift.categories?.includes(currentStaffMember.staffCategory) &&
+                    (!shift.staffCategories || shift.staffCategories.includes(currentStaffMember.staffCategory)) &&
                     !assignedStaff.has(currentStaffMember.name) &&
                     !isStaffInShiftException(currentStaffMember.name, shift.name, dayOfWeek, shiftExceptions)
                 ) {
@@ -358,7 +358,7 @@ function processConsecutiveShiftAssignmentRuleConsecutiveDays(
             }
             const eligibleStaff = staff.filter(
                 (s: any) =>
-                    shift.categories?.includes(s.staffCategory) &&
+                    (!shift.staffCategories || shift.staffCategories.includes(s.staffCategory)) &&
                     !assignedStaff.has(s.name) &&
                     !isStaffInShiftException(s.name, shift.name, dayOfWeek, shiftExceptions) &&
                     !gapTracking[s.name]
@@ -385,7 +385,7 @@ function processConsecutiveShiftAssignmentRuleConsecutiveDays(
             const eligibleStaff = staff.filter(
                 (s: any) =>
                     ruleConfig.staffMembers.includes(s.name) &&
-                    shift.categories?.includes(s.staffCategory) &&
+                    (!shift.staffCategories || shift.staffCategories.includes(s.staffCategory)) &&
                     !assignedStaff.has(s.name) &&
                     !isStaffInShiftException(s.name, shift.name, dayOfWeek, shiftExceptions) &&
                     !gapTracking[s.name]
@@ -440,7 +440,9 @@ function findStaffWithMinimumShifts(
         return { staff: s, count };
     });
     const staffWithMinShifts = staffWithShiftCounts.filter((item: { staff: any; count: number }) => item.count === minShifts);
-    const eligibleStaff = staffWithMinShifts.map((item: any) => item.staff);
+    const eligibleStaff = staffWithMinShifts
+        .map((item: any) => item.staff)
+        .filter((s: any) => !shift.staffCategories || shift.staffCategories.includes(s.staffCategory));
     const selectedStaffObj = eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)];
     return selectedStaffObj || null;
 }
@@ -502,10 +504,11 @@ function getAvailableStaff(
     const staffPool = selectedStaffs.length > 0 ? selectedStaffs : staff;
     return staffPool.filter(
         (s: any) =>
-            shift.categories?.includes(s.staffCategory) &&
+            (!shift.staffCategories || shift.staffCategories.includes(s.staffCategory)) &&
             !assignedStaff.has(s.name) &&
             !isStaffInShiftException(s.name, shift.name, dayOfWeek, shiftExceptions) &&
             !isStaffInConsecutiveShiftAssignmentRuleGapDays(s.name, shift.name, ruleTracking, consecutiveShiftAssignmentRules)
+            && !isStaffAssignedToday(s.name, ruleTracking.dayRoster)
     );
 }
 
@@ -560,6 +563,13 @@ function updateShiftCountTracker(shiftCountTracker: any, staff: any, shift: any)
         }
         shiftCountTracker[staff.name][shift.name]++;
     }
+}
+
+function isStaffAssignedToday(staffName: string, dayRoster?: { shifts?: any[] }) {
+    if (!dayRoster || !Array.isArray(dayRoster.shifts)) return false;
+    return dayRoster.shifts.some(
+        (shift) => shift.staff && shift.staff.some((s: any) => s.name === staffName)
+    );
 }
 
 // New function to handle roster generation from the UI
